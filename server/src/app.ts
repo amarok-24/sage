@@ -7,7 +7,6 @@ import path from 'path';
 import { connectDB } from './config/db';
 import braindumpRoutes from './routes/braindump.routes';
 import authRoutes from './routes/auth.routes';
-import { rateLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 
 import dashboardRoutes from './routes/dashboard.routes';
@@ -39,10 +38,20 @@ app.use('/api/auth', authRoutes);
 app.use('/api/braindump', braindumpRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/entries', entriesRoutes);
+import swaggerUi from 'swagger-ui-express';
+import * as fs from 'fs';
+
 app.use('/api/habits', habitsRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/user', userRoutes);
+
+// Swagger Documentation
+const swaggerFile = path.resolve(process.cwd(), 'swagger-output.json');
+if (fs.existsSync(swaggerFile)) {
+  const swaggerDocument = JSON.parse(fs.readFileSync(swaggerFile, 'utf8'));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 // Global Error Handler (must be after all routes)
 app.use(errorHandler);

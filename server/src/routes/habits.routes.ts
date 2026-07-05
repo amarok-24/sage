@@ -20,7 +20,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const completedSet = new Set(logs.filter(l => l.completed).map(l => l.habitName));
     
     const habits = user.habits.map(h => ({
-      ...h.toObject(),
+      ...(h as any).toObject(),
       completedToday: completedSet.has(h.name)
     }));
 

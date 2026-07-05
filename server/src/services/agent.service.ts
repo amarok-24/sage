@@ -1,5 +1,4 @@
 import { BrainDumpResponseSchema } from '@bodhi/shared';
-import axios from 'axios';
 import logger from '../utils/logger';
 
 const ADK_AGENT_URL = process.env.ADK_AGENT_URL ?? 'http://localhost:8001';

@@ -134,3 +134,5 @@ dist
 server/uploads/
 server/dist/
 shared/dist/
+server/swagger-output.json
+server/logs/
