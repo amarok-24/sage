@@ -1,4 +1,6 @@
 import { BrainDumpResponseSchema } from '@bodhi/shared';
+import axios from 'axios';
+import logger from '../utils/logger';
 
 const ADK_AGENT_URL = process.env.ADK_AGENT_URL ?? 'http://localhost:8001';
 
@@ -19,7 +21,7 @@ export async function processBrainDump(userId: string, text: string) {
     const data = await response.json();
     return BrainDumpResponseSchema.parse(data);
   } catch (error) {
-    console.error("Error calling agent service:", error);
+    logger.error("Error calling agent service:", error);
     throw error;
   }
 }

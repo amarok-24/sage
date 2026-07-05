@@ -7,6 +7,7 @@ import { HabitLog } from '../models/HabitLog';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { validate } from '../middleware/validate';
+import logger from '../utils/logger';
 
 const router = Router();
 
@@ -100,7 +101,7 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
     });
     
   } catch (error: any) {
-    console.error("Braindump processing error:", error);
+    logger.error("Braindump processing error:", error);
     res.status(500).json({ error: 'Failed to process braindump', details: error.message });
   }
 });
