@@ -1,0 +1,32 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "test_case_1",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Spent $15 on paneer tikka, took 1 hour, checking off my study habit, felt great today."}]
+      }
+    },
+    {
+      "eval_case_id": "test_case_2",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Had a 30 min morning run, ate 2 masala dosas for breakfast, my knee pain is a 4/10 today."}]
+      }
+    },
+    {
+      "eval_case_id": "test_case_3",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Slept poorly last night, only 5 hours. Bought groceries for $45.40 at Whole Foods."}]
+      }
+    },
+    {
+      "eval_case_id": "test_case_4",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Deep work session for 2.5 hours on the bodhi project. Skipped my meditation habit."}]
+      }
+    }
+  ]
+}
