@@ -22,8 +22,31 @@ interface ActivityFeedProps {
 export function ActivityFeed({ entries }: ActivityFeedProps) {
   if (entries.length === 0) {
     return (
-      <div className="text-center py-12 text-bodhi-brown-400 font-serif italic">
-        Your garden is quiet. Plant a seed above.
+      <div className="w-full max-w-2xl mx-auto mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out fill-mode-both">
+        <div className="text-center space-y-3">
+          <h2 className="text-2xl font-serif text-bodhi-brown-900">Welcome to Bodhi. What's on your mind?</h2>
+          <p className="text-bodhi-brown-500 max-w-md mx-auto leading-relaxed">
+            Bodhi uses AI to automatically categorize your brain dumps. Try typing a freeform log below—here are some examples of what you can track:
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card icon={<CheckCircle2 className="w-5 h-5 text-bodhi-green-600" />} title="Habits & Time">
+            <p className="text-sm font-serif italic text-bodhi-brown-700">"I ran for 30 minutes and read 10 pages of my book."</p>
+          </Card>
+          
+          <Card icon={<Utensils className="w-5 h-5 text-orange-600" />} title="Nutrition">
+            <p className="text-sm font-serif italic text-bodhi-brown-700">"For lunch, I had a chicken salad with olive oil dressing."</p>
+          </Card>
+          
+          <Card icon={<Wallet className="w-5 h-5 text-amber-600" />} title="Expenses">
+            <p className="text-sm font-serif italic text-bodhi-brown-700">"Spent $45 on groceries at Trader Joe's."</p>
+          </Card>
+          
+          <Card icon={<HeartPulse className="w-5 h-5 text-red-600" />} title="Mood & Sleep">
+            <p className="text-sm font-serif italic text-bodhi-brown-700">"Slept 7 hours but feeling a bit anxious today. Mood is 6/10."</p>
+          </Card>
+        </div>
       </div>
     );
   }

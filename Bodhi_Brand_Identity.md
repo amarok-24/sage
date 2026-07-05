@@ -20,8 +20,8 @@ Bodhi assumes that ultimate clarity about one's work-life balance, health, and f
 **Core Identity:** A digital space for profound personal insight and effortless awareness.
 
 **Taglines:**
-* *Awaken to your habits.*
 * *Grow your awareness. Master your time.*
+* *Awaken to your habits.*
 * *Plant the seed of clarity.*
 
 **The Promise:** You are no longer dumping data into a void. You are actively cultivating a system that provides ultimate clarity on how you spend your energy, your time, and your resources.
