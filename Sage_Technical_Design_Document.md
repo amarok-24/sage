@@ -1,4 +1,4 @@
-# Technical Design Document: Bodhi
+# Technical Design Document: Sage
 
 **Project:** Unified Personal "Second Brain" Assistant  
 **Document Version:** 1.0  
@@ -26,7 +26,7 @@
 
 ### 1.1 Design Philosophy
 
-Bodhi's architecture is governed by three immutable constraints derived from the Brand Identity and PRD:
+Sage's architecture is governed by three immutable constraints derived from the Brand Identity and PRD:
 
 1. **Zero-friction entry** — The user interacts with a single text input. All structural intelligence lives server-side.
 2. **Cloud-first AI** — Zero LLM weights reside on the client or backend. All cognitive processing is offloaded to Google Gemini via the ADK 2.0 agent runtime.
@@ -60,7 +60,7 @@ Bodhi's architecture is governed by three immutable constraints derived from the
                                                        │  ┌────────▼───────────┐  │
                                                        │  │ ADK 2.0 Agent      │  │
                                                        │  │ Service Layer      │  │
-                                                       │  │ (Bodhi Router      │  │
+                                                       │  │ (Sage Router      │  │
                                                        │  │  Agent)            │  │
                                                        │  └────────┬───────────┘  │
                                                        └───────────┼──────────────┘
@@ -78,7 +78,7 @@ Bodhi's architecture is governed by three immutable constraints derived from the
                                 └──────────────────┘                                  │
                                                                                       │
                               ┌───────────────────────────────────────────────────┐   │
-                              │         Google Gemini 3.5 Flash API               │◄──┘
+                              │         Google Gemini 3.1 Flash Lite API               │◄──┘
                               │         (Cloud LLM — Structured Output)           │
                               └───────────────────────────────────────────────────┘
 ```
@@ -118,12 +118,12 @@ React Client ──► POST /api/braindump ──► Node.js Server
 |-------|-----------|---------|---------------|
 | **Frontend Framework** | React (via Vite) | React 19+ / Vite 6+ | Lightning-fast HMR, zero-config TypeScript, tree-shaking. No SSR overhead for a personal SPA. |
 | **Frontend Language** | TypeScript | 5.x | Type safety across shared Zod schemas, IDE autocompletion, reduced runtime bugs. |
-| **CSS Framework** | Tailwind CSS | 4.x | Utility-first, enabling rapid implementation of Bodhi's organic design language (earth tones, fluid transitions). |
+| **CSS Framework** | Tailwind CSS | 4.x | Utility-first, enabling rapid implementation of Sage's organic design language (earth tones, fluid transitions). |
 | **Backend Runtime** | Node.js | 26 LTS | Unified TypeScript ecosystem. Native `fetch`, `crypto`, and ESM support. |
 | **Backend Framework** | Express.js | 5.x | Mature middleware ecosystem (JWT, rate limiting, CORS). Lightweight and well-understood. |
 | **Validation** | Zod | 3.x | Runtime schema validation on client and server. Drives the ADK agent's structured output contract. |
 | **AI Agent Runtime** | Google ADK 2.0 | ≥ 2.0.0 | Graph-based `Workflow` engine with fan-out/fan-in, conditional routing, and Pydantic `output_schema` for deterministic structured output. |
-| **LLM Model** | Gemini 3.5 Flash | Latest | High-speed structured output, excellent multilingual + Indian food corpus coverage. |
+| **LLM Model** | Gemini 3.1 Flash Lite | Latest | High-speed structured output, excellent multilingual + Indian food corpus coverage. |
 | **Database** | MongoDB Atlas | 8.x (M0 Free Tier) | Flexible document schema for heterogeneous entry types. Native JSON storage aligns with LLM outputs. |
 | **ODM** | Mongoose | 10.x | Schema enforcement, middleware hooks, population. Mature TypeScript support. |
 | **Media Storage** | Cloudflare R2 | S3-compatible | Zero egress fees, global edge caching, S3-compatible SDK. |
@@ -201,7 +201,7 @@ Existing nutrition APIs index heavily on Western food databases (USDA, FatSecret
 
 #### The Solution
 
-Bodhi leverages Gemini 3.5 Flash's internal training corpus, which covers Indian nutritional data extensively. The ADK agent's system prompt embeds a **calibrated reference table** for common Indian measurements, ensuring consistent estimation without any third-party API.
+Sage leverages Gemini 3.1 Flash Lite's internal training corpus, which covers Indian nutritional data extensively. The ADK agent's system prompt embeds a **calibrated reference table** for common Indian measurements, ensuring consistent estimation without any third-party API.
 
 #### Measurement Reference Table (Embedded in Agent Prompt)
 
@@ -304,12 +304,12 @@ Backend (habit.service.ts):
 | **Extensibility** | Adding a new entity type requires refactoring the monolithic prompt | Add a new branch node — zero impact on existing nodes |
 | **Testing** | Must mock the entire API response | Test individual nodes in isolation with typed inputs/outputs |
 
-### 4.2 Agent Persona: "The Bodhi Cultivator"
+### 4.2 Agent Persona: "The Sage Cultivator"
 
 ```
-SYSTEM PROMPT (Bodhi Cultivator Agent):
+SYSTEM PROMPT (Sage Cultivator Agent):
 ────────────────────────────────────────
-You are The Cultivator — the intelligent core of the Bodhi system.
+You are The Cultivator — the intelligent core of the Sage system.
 Your role is to receive raw, unstructured user input (a "seed") and
 nurture it into structured, categorized data (the "roots" of the
 user's Second Brain).
@@ -490,7 +490,7 @@ class FullParsedOutput(BaseModel):
 
 cultivator = LlmAgent(
     name="cultivator",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction=CULTIVATOR_SYSTEM_PROMPT,
     output_schema=FullParsedOutput,
     output_key="parsed_result",
@@ -543,7 +543,7 @@ def persist_all(ctx, node_input: dict) -> dict:
 root_agent = Workflow(
     name="bodhi_router",
     description=(
-        "Bodhi's Universal Input Router — parses unstructured text "
+        "Sage's Universal Input Router — parses unstructured text "
         "into structured life data across nutrition, expenses, time, "
         "habits, and journaling."
     ),
@@ -562,7 +562,7 @@ root_agent = Workflow(
 
 ### 4.5 Hybrid Multi-Agent Architecture
 
-Bodhi uses a **hybrid multi-agent pattern** — a fast synchronous core agent for real-time parsing, backed by asynchronous specialist agents for background enrichment.
+Sage uses a **hybrid multi-agent pattern** — a fast synchronous core agent for real-time parsing, backed by asynchronous specialist agents for background enrichment.
 
 #### Architecture Diagram
 
@@ -574,7 +574,7 @@ Bodhi uses a **hybrid multi-agent pattern** — a fast synchronous core agent fo
 │  │  START  │────►│   cultivator          │────►│     persist_all           │  │
 │  │         │     │   (LlmAgent)          │     │     (Function)            │  │
 │  │ User    │     │                       │     │                           │  │
-│  │ text    │     │ Model: gemini-3.5-    │     │ • Write nutrition entries  │  │
+│  │ text    │     │ Model: gemini-3.1-    │     │ • Write nutrition entries  │  │
 │  │ + userId│     │        flash          │     │ • Write expense entries    │  │
 │  │         │     │                       │     │ • Write time log entries   │  │
 │  │         │     │ Schema: FullParsed    │     │ • Write sleep logs         │  │
@@ -635,7 +635,7 @@ from agent.schemas import (
 
 journal_enricher = LlmAgent(
     name="journal_enricher",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
     You are a reflective journaling assistant. Given a raw journal entry, produce:
     1. mood_score (1–10, where 10 is peak positivity)
@@ -651,7 +651,7 @@ journal_enricher = LlmAgent(
 
 sleep_analyzer = LlmAgent(
     name="sleep_analyzer",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
     You are a sleep quality analyst. Given a user's sleep log and their
     recent 7-day sleep history, produce:
@@ -667,7 +667,7 @@ sleep_analyzer = LlmAgent(
 
 somatic_correlator = LlmAgent(
     name="somatic_correlator",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
     You are a health pattern analyst. Given a somatic symptom log and the
     user's recent nutrition, sleep, and stress data (from journal mood scores),
@@ -687,7 +687,7 @@ somatic_correlator = LlmAgent(
 
 expense_analyzer = LlmAgent(
     name="expense_analyzer",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
     You are a financial health analyst. Given a user's daily expenses and
     journal mood data, produce:
@@ -704,7 +704,7 @@ expense_analyzer = LlmAgent(
 
 time_analyzer = LlmAgent(
     name="time_analyzer",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
     You are a productivity and flow state analyst. Given a user's daily time logs,
     produce:
@@ -720,9 +720,9 @@ time_analyzer = LlmAgent(
 
 insight_synthesizer = LlmAgent(
     name="insight_synthesizer",
-    model="gemini-3.5-flash",
+    model="gemini-3.1-flash-lite",
     instruction="""
-    You are Bodhi's weekly insight engine. Given a user's aggregated data
+    You are Sage's weekly insight engine. Given a user's aggregated data
     across all 7 domains (nutrition, expenses, time, habits, sleep, somatic,
     journal) for the past 7 days, produce:
     1. top_insight: The single most impactful cross-domain correlation.
@@ -1239,7 +1239,7 @@ MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/bodhi?retryWrites=tr
 # ── Google AI / ADK ───────────────────────
 GOOGLE_GENAI_API_KEY=<gemini-api-key>
 ADK_AGENT_URL=http://localhost:8001    # Python agent microservice
-ADK_MODEL=gemini-3.5-flash
+ADK_MODEL=gemini-3.1-flash-lite
 
 # ── Cloudflare R2 ─────────────────────────
 R2_ACCOUNT_ID=<cloudflare-account-id>
@@ -1391,7 +1391,7 @@ app = FastAPI()
 session_service = InMemorySessionService()
 runner = Runner(
     agent=root_agent,
-    app_name="bodhi",
+    app_name="sage",
     session_service=session_service,
 )
 
@@ -1402,7 +1402,7 @@ class BrainDumpRequest(BaseModel):
 @app.post("/process")
 async def process_braindump(payload: BrainDumpRequest):
     session = await session_service.create_session(
-        app_name="bodhi",
+        app_name="sage",
         user_id=payload.user_id,
     )
     user_message = types.Content(

@@ -4,7 +4,7 @@
       "eval_case_id": "test_case_1",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Spent $15 on paneer tikka, took 1 hour, checking off my study habit, felt great today."}]
+        "parts": [{"text": "Spent $15 on paneer tikka, took 1 hour, checking off my study rhythms, felt great today."}]
       }
     },
     {
@@ -25,14 +25,14 @@
       "eval_case_id": "test_case_4",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Deep work session for 2.5 hours on the bodhi project. Skipped my meditation habit."}]
+        "parts": [{"text": "Deep work session for 2.5 hours on the sage project. Skipped my meditation rhythms."}]
       }
     },
     {
       "eval_case_id": "test_case_5",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Just woke up after 8 hours of solid sleep. Gonna eat a banana and go for a 45 min bike ride. Feeling 8/10 mood."}]
+        "parts": [{"text": "Just woke up after 8 hours of solid rest. Gonna eat a banana and go for a 45 min bike ride. Feeling 8/10 mood."}]
       }
     },
     {
@@ -46,7 +46,7 @@
       "eval_case_id": "test_case_7",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "Cooked dinner at home so zero expenses. Spent 2 hours reading. Completed my daily reading habit. Sleep was okay, about 7 hours."}]
+        "parts": [{"text": "Cooked dinner at home so zero resources. Spent 2 hours reading. Completed my daily reading rhythms. Rest was okay, about 7 hours."}]
       }
     }
   ]

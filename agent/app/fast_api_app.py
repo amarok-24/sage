@@ -91,6 +91,65 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     return {"status": "success"}
 
 
+from fastapi import Request, HTTPException
+from pydantic import BaseModel
+from datetime import datetime, timezone
+from google.genai import types
+
+class BrainDumpRequest(BaseModel):
+    user_id: str
+    text:    str
+
+@app.post("/process")
+async def process_braindump(request: Request, payload: BrainDumpRequest):
+    runner: Runner = request.app.state.runner
+    session_service = runner.session_service
+    
+    session = await session_service.create_session(
+        app_name=request.app.state.agent_app_name,
+        user_id=payload.user_id,
+    )
+    
+    user_message = types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=payload.text)]
+    )
+    
+    # Run the workflow and capture the router event
+    router_output_str = None
+    async for event in runner.run_async(
+        session_id=session.id,
+        user_id=payload.user_id,
+        new_message=user_message,
+    ):
+        if event.author == "router" and event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    router_output_str = part.text
+        
+    if not router_output_str:
+        raise HTTPException(status_code=500, detail="Agent produced no parsed output")
+        
+    import json
+    try:
+        router_output = json.loads(router_output_str)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse agent JSON output: {e}")
+        
+    response_data = {
+        "nutrition": router_output.get("nutrition") or [],
+        "expenses": router_output.get("expenses") or [],
+        "time_logs": router_output.get("time_logs") or [],
+        "habits_completed": router_output.get("habits") or [],
+        "sleep": router_output.get("sleep"),
+        "somatic_logs": router_output.get("somatic_logs") or [],
+        "journal": router_output.get("journal"),
+        "raw_text": payload.text,
+        "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    }
+    return response_data
+
+
 # Main execution
 if __name__ == "__main__":
     import uvicorn

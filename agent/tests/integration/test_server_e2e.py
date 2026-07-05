@@ -236,3 +236,27 @@ def test_collect_feedback(server_fixture: subprocess.Popen[str]) -> None:
         FEEDBACK_URL, json=feedback_data, headers=HEADERS, timeout=10
     )
     assert response.status_code == 200
+
+
+def test_process_endpoint(server_fixture: subprocess.Popen[str]) -> None:
+    """Test the custom /process endpoint end-to-end."""
+    payload = {
+        "user_id": f"user_{uuid.uuid4()}",
+        "text": "Spent $15 on paneer tikka, took 1 hour, checking off my study rhythms, felt great today."
+    }
+    response = requests.post(
+        f"{BASE_URL}/process", json=payload, headers=HEADERS, timeout=30
+    )
+    print("RESPONSE TEXT:", response.text)
+    assert response.status_code == 200
+    data = response.json()
+    
+    # Assert fields matching BrainDumpResponseSchema
+    for key in ("nutrition", "expenses", "time_logs", "habits_completed", "sleep", "somatic_logs", "journal", "raw_text", "parsed_at"):
+        assert key in data, f"Missing field in /process response: {key}"
+        
+    assert data["raw_text"] == payload["text"]
+    assert len(data["expenses"]) == 1
+    assert data["expenses"][0]["amount"] == 15.0
+    assert len(data["habits_completed"]) == 1
+    assert "study" in data["habits_completed"][0]["habit_name"].lower()

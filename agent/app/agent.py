@@ -29,7 +29,7 @@ else:
 # 1. LLM Router Node
 router_agent = LlmAgent(
     name="router",
-    model="gemini-flash-latest",
+    model="gemini-3.1-flash-lite",
     instruction="""You are the Bodhi Universal Input Router.
 The user will provide an unstructured daily log. Your task is to extract and route the information into the appropriate structured schemas (Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal). 
 Do not make up information. Only fill in the fields if they are explicitly mentioned or strongly implied.

@@ -14,7 +14,7 @@ importers:
 
   client:
     dependencies:
-      '@bodhi/shared':
+      '@sage/shared':
         specifier: workspace:*
         version: link:../shared
       clsx:
@@ -87,7 +87,7 @@ importers:
 
   server:
     dependencies:
-      '@bodhi/shared':
+      '@sage/shared':
         specifier: workspace:*
         version: link:../shared
       bcryptjs:
