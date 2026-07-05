@@ -43,6 +43,8 @@ How the PRD's technical features map to the Bodhi philosophy:
 * **Time & Habit Routing (The Roots):** Retroactive natural language parsing seamlessly captures long-term goals. *Example Input:* "Dedicated an hour to studying system design and AI concepts today, and finished my home workout." Bodhi silently updates the skill-building streak and the fitness log.
 * **Financial Tracking (The Leaves):** Captures economic energy effortlessly. *Example Input:* "Set aside funds for my advanced tax and invested in the latest Sovereign Gold Bond tranche." The LLM routes these to the financial pillar without requiring category dropdowns.
 * **Daily Journaling (The Canopy):** The reflective diary captures the subjective experience. The asynchronous AI enrichment generates `mood_score` and `summary_snippets`, revealing how the toxic elements of a corporate environment or the joy of engaging in a hobby impact the user's overall wellness over time.
+* **Sleep & Restfulness (The Heartwood):** Sleep is the hidden pillar of every metric Bodhi tracks. *Example Input:* "Slept at 11:30 PM, woke up at 7 AM, felt deeply rested." Bodhi captures duration, quality, and timing — correlating rest patterns with next-day productivity, focus scores, and emotional baselines over time.
+* **Somatic Logs (The Bark):** The body's signals are data too. *Example Input:* "Had a headache in the afternoon, took an ibuprofen, felt better in an hour." Bodhi logs symptoms, severity, and remedies — surfacing hidden correlations like food intolerances triggering bloating or stress-induced flare-ups.
 
 ## 5. The Evolution of Insight
 After three months of interacting with Bodhi, the user doesn't just see a dashboard; they see the true shape of their life. 

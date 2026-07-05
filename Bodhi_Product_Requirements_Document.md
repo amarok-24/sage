@@ -11,7 +11,7 @@
 Tracking personal metrics—expenses, time allocation, daily habits, nutritional intake, and journaling—typically requires switching context between five different applications. This friction leads to cognitive fatigue, inconsistent tracking, and missing data. Furthermore, existing nutrition applications heavily index on Western datasets, requiring manual deconstruction for regional Indian meals.
 
 ### 1.2 The Solution
-A unified, zero-friction web application designed around a "Universal Input Portal." Instead of navigating discrete menus, the user provides a single unstructured brain-dump (via text). A cloud-hosted Large Language Model (LLM) utilizing Structured JSON Outputs acts as an intelligent router, parsing the unstructured input into distinct database objects for expenses, time logs, habits, and nutrition. A journaling layer aggregates emotional and contextual metadata.
+A unified, zero-friction web application designed around a "Universal Input Portal." Instead of navigating discrete menus, the user provides a single unstructured brain-dump (via text). A cloud-hosted Large Language Model (LLM) utilizing Structured JSON Outputs acts as an intelligent router, parsing the unstructured input into distinct database objects for expenses, time logs, habits, nutrition, sleep, and somatic symptoms. A journaling layer aggregates emotional and contextual metadata.
 
 ---
 
@@ -60,7 +60,25 @@ A unified, zero-friction web application designed around a "Universal Input Port
   * Validates if a defined habit was mentioned in the text block.
   * Automatically flags the habit as `completed = true` for the current date.
 
-### 3.6 Daily Journaling & Media Integration
+### 3.6 Sleep & Restfulness Tracking
+* **Description:** Logs sleep patterns from natural language input and tracks rest quality over time.
+* **Key Capabilities:**
+  * Parses bedtime, wake time, and subjective quality from conversational text.
+  * Computes sleep duration automatically.
+  * Tracks sleep consistency trends over weeks/months.
+* **AI Output Schema:**
+  * `bedtime` (ISO8601 timestamp), `wake_time` (ISO8601 timestamp), `duration_hours` (Float), `quality` (Enum: "deep", "moderate", "light", "poor"), `notes` (String, optional).
+
+### 3.7 Somatic Logs & Symptom Tracking
+* **Description:** Captures physical symptoms, their severity, and any remedies taken.
+* **Key Capabilities:**
+  * Extracts symptom type, body location, severity, and duration from text.
+  * Logs medications or remedies with timestamps.
+  * Enables long-term correlation with nutrition, sleep, and stress data.
+* **AI Output Schema:**
+  * `symptom` (String), `severity` (Integer, 1–10), `body_area` (String, optional), `remedy_taken` (String, optional), `duration_minutes` (Integer, optional), `resolved` (Boolean).
+
+### 3.8 Daily Journaling & Media Integration
 * **Description:** A reflective diary capturing subjective experiences, combined with media attachments and automated insights.
 * **Key Capabilities:**
   * **Media Uploads:** Supports image and video attachments. Media is directly uploaded to a cloud storage bucket, and public URLs are saved to the database.

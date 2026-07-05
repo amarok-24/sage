@@ -326,6 +326,12 @@ BEHAVIOR DIRECTIVES:
 5. Time references are relative to the user's local timezone.
 6. Habit matching should be fuzzy — "worked out" matches "workout",
    "meditated" matches "meditation", "read a chapter" matches "reading".
+7. For SLEEP data, extract bedtime, wake time, duration, and subjective
+   quality. Infer quality from phrases like "slept well" (deep),
+   "tossed and turned" (poor), "okay sleep" (moderate).
+8. For SOMATIC LOGS, extract symptom name, severity (1–10), affected
+   body area, any remedy taken, and whether it resolved. Always log
+   these — even minor mentions like "slight headache" or "felt nauseous".
 
 INDIAN FOOD REFERENCE TABLE:
 ┌─────────────────────┬──────────────┬──────────────────────────┐
@@ -418,11 +424,30 @@ export const JournalMetadataSchema = z.object({
   summary_snippet:  z.string().max(200),
 });
 
+export const SleepLogSchema = z.object({
+  bedtime:        z.string().datetime(),
+  wake_time:      z.string().datetime(),
+  duration_hours: z.number().positive(),
+  quality:        z.enum(['deep', 'moderate', 'light', 'poor']),
+  notes:          z.string().optional(),
+});
+
+export const SomaticLogSchema = z.object({
+  symptom:          z.string(),
+  severity:         z.number().int().min(1).max(10),
+  body_area:        z.string().optional(),
+  remedy_taken:     z.string().optional(),
+  duration_minutes: z.number().int().optional(),
+  resolved:         z.boolean(),
+});
+
 export const BrainDumpResponseSchema = z.object({
   nutrition:         z.array(NutritionOutputSchema).default([]),
   expenses:          z.array(ExpenseOutputSchema).default([]),
   time_logs:         z.array(TimeLogOutputSchema).default([]),
   habits_completed:  z.array(HabitMatchSchema).default([]),
+  sleep:             SleepLogSchema.optional().nullable(),
+  somatic_logs:      z.array(SomaticLogSchema).default([]),
   journal:           JournalMetadataSchema.optional().nullable(),
   raw_text:          z.string(),
   parsed_at:         z.string().datetime(),
@@ -444,7 +469,7 @@ from typing import Optional
 from agent.prompts import CULTIVATOR_SYSTEM_PROMPT
 from agent.schemas import (
     NutritionOutput, ExpenseOutput, TimeLogOutput,
-    HabitMatch, JournalMetadata,
+    HabitMatch, SleepLog, SomaticLog, JournalMetadata,
 )
 from agent.tools import get_user_habits, persist_entries
 
@@ -456,6 +481,8 @@ class FullParsedOutput(BaseModel):
     expenses:          list[ExpenseOutput]    = []
     time_logs:         list[TimeLogOutput]    = []
     habits_completed:  list[HabitMatch]       = []
+    sleep:             Optional[SleepLog]     = None
+    somatic_logs:      list[SomaticLog]       = []
     journal:           Optional[JournalMetadata] = None
 
 
@@ -496,6 +523,14 @@ def persist_all(ctx, node_input: dict) -> dict:
             entry_id = persist_fn(ctx, item)
             created_ids.append(entry_id)
 
+    if result.sleep:
+        entry_id = persist_entries.sleep(ctx, result.sleep)
+        created_ids.append(entry_id)
+
+    for s in result.somatic_logs:
+        entry_id = persist_entries.somatic(ctx, s)
+        created_ids.append(entry_id)
+
     if result.journal:
         entry_id = persist_entries.journal(ctx, result.journal)
         created_ids.append(entry_id)
@@ -525,35 +560,83 @@ root_agent = Workflow(
 )
 ```
 
-### 4.5 Workflow Architecture Diagram
+### 4.5 Hybrid Multi-Agent Architecture
+
+Bodhi uses a **hybrid multi-agent pattern** — a fast synchronous core agent for real-time parsing, backed by asynchronous specialist agents for background enrichment.
+
+#### Architecture Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                      bodhi_router Workflow                       │
-│                                                                  │
-│  ┌─────────┐     ┌───────────────────────┐     ┌─────────────┐  │
-│  │  START  │────►│   cultivator          │────►│ persist_all │  │
-│  │         │     │   (LlmAgent)          │     │ (Function)  │  │
-│  │ User    │     │                       │     │             │  │
-│  │ text    │     │ Model: gemini-3.5-    │     │ MongoDB     │  │
-│  │ + userId│     │        flash          │     │ writes for  │  │
-│  │         │     │                       │     │ each entity │  │
-│  │         │     │ Schema: FullParsed    │     │ type        │  │
-│  │         │     │         Output        │     │             │  │
-│  │         │     │                       │     │ Returns     │  │
-│  │         │     │ Tool: get_user_habits │     │ entry IDs   │  │
-│  └─────────┘     └───────────────────────┘     └─────────────┘  │
-│                                                                  │
-│  RetryConfig: 3 attempts, exponential backoff, 0.5s jitter      │
-└──────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                          bodhi_router Workflow                                │
+│                                                                               │
+│  ┌─────────┐     ┌───────────────────────┐     ┌───────────────────────────┐  │
+│  │  START  │────►│   cultivator          │────►│     persist_all           │  │
+│  │         │     │   (LlmAgent)          │     │     (Function)            │  │
+│  │ User    │     │                       │     │                           │  │
+│  │ text    │     │ Model: gemini-3.5-    │     │ • Write nutrition entries  │  │
+│  │ + userId│     │        flash          │     │ • Write expense entries    │  │
+│  │         │     │                       │     │ • Write time log entries   │  │
+│  │         │     │ Schema: FullParsed    │     │ • Write sleep logs         │  │
+│  │         │     │         Output        │     │ • Write somatic logs       │  │
+│  │         │     │                       │     │ • Upsert habit logs        │  │
+│  │         │     │ Parses ALL 7 domains  │     │ • Save journal entry       │  │
+│  │         │     │ in one LLM call       │     │                           │  │
+│  │         │     │                       │     │ Enqueues async tasks ─────┐│  │
+│  │         │     │ Tool: get_user_habits │     │                          ││  │
+│  └─────────┘     └───────────────────────┘     └──────────────────────────┘│  │
+│                                                                            │  │
+│  Synchronous — p95 latency target: < 5s                                   │  │
+└───────────────────────────────────────────────────────────────────────────┘│
+                                                                             │
+  ┌──────────────────────────────────────────────────────────────────────────┘
+  │
+  │  ASYNC SPECIALIST AGENTS (Background — non-blocking to user)
+  │
+  │  ┌────────────────────────────┐    ┌────────────────────────────────┐
+  ├─►│  journal_enricher          │    │  somatic_correlator            │
+  │  │  (LlmAgent)                │    │  (LlmAgent)                    │
+  │  │                            │    │                                │
+  │  │  • mood_score (1–10)       │    │  • Correlates symptoms with    │
+  │  │  • thematic tags           │    │    recent nutrition & sleep     │
+  │  │  • summary_snippet         │    │  • Flags potential triggers    │
+  │  │  • Runs after journal      │    │  • Runs after somatic log      │
+  │  │    entry is saved          │    │    is saved                    │
+  │  └────────────────────────────┘    └────────────────────────────────┘
+  │
+  │  ┌────────────────────────────┐    ┌────────────────────────────────┐
+  ├─►│  sleep_analyzer            │    │  insight_synthesizer           │
+  │  │  (LlmAgent)                │    │  (LlmAgent)                    │
+  │  │                            │    │                                │
+  │  │  • Sleep consistency       │    │  • Weekly cross-domain         │
+  │  │    score                   │    │    correlation analysis         │
+  │  │  • Circadian alignment     │    │  • "Your workouts correlate    │
+  │  │    indicator               │    │    with lower food delivery     │
+  │  │  • Runs after sleep        │    │    spending"                    │
+  │  │    log is saved            │    │  • Scheduled via cron job       │
+  │  └────────────────────────────┘    └────────────────────────────────┘
 ```
 
-### 4.6 Async Journal Enrichment Agent
+#### Design Rationale: Why Hybrid?
 
-A separate lightweight agent handles background journal enrichment after the main workflow completes:
+| Layer | Agents | Execution | Latency Impact |
+|-------|--------|-----------|----------------|
+| **Synchronous Core** | `cultivator` (single LlmAgent) | Inline — blocks the HTTP response | 2–4s (one Gemini round-trip) |
+| **Async Specialists** | `journal_enricher`, `sleep_analyzer`, `somatic_correlator`, `insight_synthesizer` | Background — queued after persist | 0s (invisible to user) |
+
+This architecture preserves the **zero-friction, instant-feedback** promise of the Brand Identity while enabling deep, multi-domain intelligence that runs silently in the background.
+
+### 4.6 Async Specialist Agent Definitions
 
 ```python
-# agent/enricher.py
+# agent/specialists.py
+
+from google.adk.agents import LlmAgent
+from agent.schemas import (
+    JournalMetadata, SleepAnalysis,
+    SomaticCorrelation, WeeklyInsight,
+)
+
 
 journal_enricher = LlmAgent(
     name="journal_enricher",
@@ -569,6 +652,98 @@ journal_enricher = LlmAgent(
     output_schema=JournalMetadata,
     output_key="journal_enrichment",
 )
+
+
+sleep_analyzer = LlmAgent(
+    name="sleep_analyzer",
+    model="gemini-3.5-flash",
+    instruction="""
+    You are a sleep quality analyst. Given a user's sleep log and their
+    recent 7-day sleep history, produce:
+    1. consistency_score (1–10): How regular is their sleep/wake schedule?
+    2. circadian_alignment: "aligned", "slightly_shifted", or "misaligned"
+    3. recommendation: A single actionable tip (e.g., "Consider a consistent
+       10:30 PM bedtime to align with your natural wake pattern.")
+    """,
+    output_schema=SleepAnalysis,
+    output_key="sleep_analysis",
+)
+
+
+somatic_correlator = LlmAgent(
+    name="somatic_correlator",
+    model="gemini-3.5-flash",
+    instruction="""
+    You are a health pattern analyst. Given a somatic symptom log and the
+    user's recent nutrition, sleep, and stress data (from journal mood scores),
+    identify potential correlations:
+    1. potential_triggers: List of possible triggers (e.g., "High dairy intake",
+       "Poor sleep last 2 nights", "Elevated stress from work")
+    2. confidence: "high", "medium", or "low"
+    3. suggestion: A gentle, non-medical observation.
+
+    IMPORTANT: You are NOT a medical professional. Always frame insights as
+    observations, never as diagnoses. Include a disclaimer.
+    """,
+    output_schema=SomaticCorrelation,
+    output_key="somatic_correlation",
+)
+
+
+insight_synthesizer = LlmAgent(
+    name="insight_synthesizer",
+    model="gemini-3.5-flash",
+    instruction="""
+    You are Bodhi's weekly insight engine. Given a user's aggregated data
+    across all 7 domains (nutrition, expenses, time, habits, sleep, somatic,
+    journal) for the past 7 days, produce:
+    1. top_insight: The single most impactful cross-domain correlation.
+    2. supporting_data: 2–3 data points that support the insight.
+    3. growth_area: One area where the user can improve next week.
+    4. celebration: One thing the user did well this week.
+    """,
+    output_schema=WeeklyInsight,
+    output_key="weekly_insight",
+)
+```
+
+### 4.7 Agent Orchestration: Sync vs. Async Flow
+
+```
+User submits brain dump
+        │
+        ▼
+┌─── SYNCHRONOUS (blocks response) ───────────────────────────┐
+│                                                              │
+│   cultivator (LlmAgent)  →  persist_all (Function)          │
+│   • 1 LLM call                                              │
+│   • Parses all 7 domains                                    │
+│   • Returns structured entries to client                     │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+        │
+        │  HTTP 200 returned to client (< 5s)
+        │
+        ▼
+┌─── ASYNCHRONOUS (background queue) ─────────────────────────┐
+│                                                              │
+│   IF journal entry was created:                              │
+│       → Enqueue journal_enricher                             │
+│       → Updates: mood_score, tags, summary_snippet           │
+│                                                              │
+│   IF sleep log was created:                                  │
+│       → Enqueue sleep_analyzer                               │
+│       → Updates: consistency_score, circadian_alignment       │
+│                                                              │
+│   IF somatic log was created:                                │
+│       → Enqueue somatic_correlator                           │
+│       → Updates: potential_triggers, suggestion               │
+│                                                              │
+│   WEEKLY (cron: Sunday 9 PM user-local):                     │
+│       → Enqueue insight_synthesizer                          │
+│       → Creates: weekly insight entry                         │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -667,7 +842,7 @@ export const User = mongoose.model<IUser>('User', UserSchema);
 
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'journal';
+export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'sleep' | 'somatic_log' | 'journal';
 
 export interface IEntry extends Document {
   userId:       Types.ObjectId;
@@ -687,7 +862,7 @@ const EntrySchema = new Schema<IEntry>({
   },
   type: {
     type: String,
-    enum: ['nutrition', 'expense', 'time_log', 'journal'],
+    enum: ['nutrition', 'expense', 'time_log', 'sleep', 'somatic_log', 'journal'],
     required: true, index: true,
   },
   date:         { type: Date, required: true, index: true },
@@ -711,6 +886,8 @@ export const Entry = mongoose.model<IEntry>('Entry', EntrySchema);
 | `nutrition` | `{ food_items[], total_calories, total_protein_g, total_carbs_g, total_fat_g, meal_type }` |
 | `expense` | `{ amount, currency, category, merchant_inferred, description }` |
 | `time_log` | `{ duration_minutes, activity_category, description }` |
+| `sleep` | `{ bedtime, wake_time, duration_hours, quality, notes?, consistency_score?, circadian_alignment? }` |
+| `somatic_log` | `{ symptom, severity, body_area?, remedy_taken?, duration_minutes?, resolved, potential_triggers?[], suggestion? }` |
 | `journal` | `{ text, media_urls[], mood_score, tags[], summary_snippet, ai_enriched }` |
 
 ### 5.4 HabitLogs Collection
@@ -1251,3 +1428,4 @@ export async function processBrainDump(userId: string, text: string) {
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | July 5, 2026 | System Architecture Team | Initial draft |
+| 1.1 | July 5, 2026 | System Architecture Team | Added Sleep & Somatic Logs domains; restructured to hybrid multi-agent architecture (sync core + 4 async specialists) |
