@@ -75,7 +75,7 @@ export function UniversalInput({ onResponse }: UniversalInputProps) {
           onKeyDown={handleKeyDown}
           placeholder="What's on your mind? (e.g. Spent $15 on lunch, meditated for 10 mins...)"
           className={cn(
-            "w-full bg-transparent border-none focus:ring-0 resize-none font-journal text-lg md:text-xl text-bodhi-brown-900 placeholder:text-bodhi-brown-400 outline-none",
+            "w-full bg-transparent border-none focus:ring-0 resize-none font-serif text-lg md:text-xl text-bodhi-brown-900 placeholder:text-bodhi-brown-400 outline-none",
             "min-h-[60px] overflow-hidden"
           )}
           disabled={isProcessing}
