@@ -73,8 +73,8 @@ app: FastAPI = get_fast_api_app(
     otel_to_cloud=False,
     lifespan=lifespan,
 )
-app.title = "bodhi-agent"
-app.description = "API for interacting with the Agent bodhi-agent"
+app.title = "agent"
+app.description = "API for interacting with the Agent agent"
 
 
 @app.post("/feedback")

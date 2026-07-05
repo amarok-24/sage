@@ -1,4 +1,4 @@
-name: "bodhi-agent"
+name: "agent"
 acli_version: "0.6.1"
 agent_directory: "app"
 region: "us-east1"

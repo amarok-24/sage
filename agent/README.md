@@ -1,4 +1,4 @@
-# bodhi-agent
+# agent
 
 Simple ReAct agent
 Agent generated with `agents-cli` version `0.6.1`
@@ -6,7 +6,7 @@ Agent generated with `agents-cli` version `0.6.1`
 ## Project Structure
 
 ```
-bodhi-agent/
+agent/
 ├── app/         # Core agent code
 │   ├── agent.py               # Main agent logic
 │   ├── fast_api_app.py        # FastAPI Backend server

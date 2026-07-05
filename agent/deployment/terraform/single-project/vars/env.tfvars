@@ -1,5 +1,5 @@
 # Project name used for resource naming
-project_name = "bodhi-agent"
+project_name = "agent"
 
 # Your Google Cloud project id
 project_id = "your-gcp-project-id"
