@@ -136,3 +136,4 @@ server/dist/
 shared/dist/
 server/swagger-output.json
 server/logs/
+server/.mongo-data/
