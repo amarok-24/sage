@@ -1,0 +1,5 @@
+{
+	"dependencies": {
+		"@rolldown/binding-darwin-arm64": "^1.1.4"
+	}
+}
