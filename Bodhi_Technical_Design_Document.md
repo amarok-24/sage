@@ -596,24 +596,19 @@ Bodhi uses a **hybrid multi-agent pattern** — a fast synchronous core agent fo
   │  ┌────────────────────────────┐    ┌────────────────────────────────┐
   ├─►│  journal_enricher          │    │  somatic_correlator            │
   │  │  (LlmAgent)                │    │  (LlmAgent)                    │
-  │  │                            │    │                                │
-  │  │  • mood_score (1–10)       │    │  • Correlates symptoms with    │
-  │  │  • thematic tags           │    │    recent nutrition & sleep     │
-  │  │  • summary_snippet         │    │  • Flags potential triggers    │
-  │  │  • Runs after journal      │    │  • Runs after somatic log      │
-  │  │    entry is saved          │    │    is saved                    │
+  │  │  • mood, tags, summary     │    │  • correlates triggers         │
   │  └────────────────────────────┘    └────────────────────────────────┘
   │
   │  ┌────────────────────────────┐    ┌────────────────────────────────┐
-  ├─►│  sleep_analyzer            │    │  insight_synthesizer           │
+  ├─►│  sleep_analyzer            │    │  expense_analyzer              │
   │  │  (LlmAgent)                │    │  (LlmAgent)                    │
-  │  │                            │    │                                │
-  │  │  • Sleep consistency       │    │  • Weekly cross-domain         │
-  │  │    score                   │    │    correlation analysis         │
-  │  │  • Circadian alignment     │    │  • "Your workouts correlate    │
-  │  │    indicator               │    │    with lower food delivery     │
-  │  │  • Runs after sleep        │    │    spending"                    │
-  │  │    log is saved            │    │  • Scheduled via cron job       │
+  │  │  • consistency, alignment  │    │  • flags impulse/creep         │
+  │  └────────────────────────────┘    └────────────────────────────────┘
+  │
+  │  ┌────────────────────────────┐    ┌────────────────────────────────┐
+  ├─►│  time_analyzer             │    │  insight_synthesizer           │
+  │  │  (LlmAgent)                │    │  (LlmAgent)                    │
+  │  │  • flow state, time drains │    │  • weekly cross-domain sync    │
   │  └────────────────────────────┘    └────────────────────────────────┘
 ```
 
@@ -622,7 +617,7 @@ Bodhi uses a **hybrid multi-agent pattern** — a fast synchronous core agent fo
 | Layer | Agents | Execution | Latency Impact |
 |-------|--------|-----------|----------------|
 | **Synchronous Core** | `cultivator` (single LlmAgent) | Inline — blocks the HTTP response | 2–4s (one Gemini round-trip) |
-| **Async Specialists** | `journal_enricher`, `sleep_analyzer`, `somatic_correlator`, `insight_synthesizer` | Background — queued after persist | 0s (invisible to user) |
+| **Async Specialists** | `journal_enricher`, `sleep_analyzer`, `somatic_correlator`, `expense_analyzer`, `time_analyzer`, `insight_synthesizer` | Background — queued after persist / end of day | 0s (invisible to user) |
 
 This architecture preserves the **zero-friction, instant-feedback** promise of the Brand Identity while enabling deep, multi-domain intelligence that runs silently in the background.
 
@@ -633,8 +628,8 @@ This architecture preserves the **zero-friction, instant-feedback** promise of t
 
 from google.adk.agents import LlmAgent
 from agent.schemas import (
-    JournalMetadata, SleepAnalysis,
-    SomaticCorrelation, WeeklyInsight,
+    JournalMetadata, SleepAnalysis, SomaticCorrelation,
+    ExpenseAnalysis, TimeAnalysis, WeeklyInsight,
 )
 
 
@@ -690,6 +685,39 @@ somatic_correlator = LlmAgent(
 )
 
 
+expense_analyzer = LlmAgent(
+    name="expense_analyzer",
+    model="gemini-3.5-flash",
+    instruction="""
+    You are a financial health analyst. Given a user's daily expenses and
+    journal mood data, produce:
+    1. anomaly_flag: True if spending velocity exceeds baseline or if impulse
+       spending is detected.
+    2. subscription_creep: Identify any potential duplicate or excessive subscriptions.
+    3. insight: A single financial insight (e.g., "High food delivery spending today
+       correlates with your 'stressed' mood tag.")
+    """,
+    output_schema=ExpenseAnalysis,
+    output_key="expense_analysis",
+)
+
+
+time_analyzer = LlmAgent(
+    name="time_analyzer",
+    model="gemini-3.5-flash",
+    instruction="""
+    You are a productivity and flow state analyst. Given a user's daily time logs,
+    produce:
+    1. deep_work_ratio: Ratio of focused work vs shallow/admin work.
+    2. time_drain: Identify the biggest time sink (e.g., "doomscrolling").
+    3. optimization_tip: A single tip (e.g., "You logged 2 hours of deep focus
+       in the morning; protect this window tomorrow.")
+    """,
+    output_schema=TimeAnalysis,
+    output_key="time_analysis",
+)
+
+
 insight_synthesizer = LlmAgent(
     name="insight_synthesizer",
     model="gemini-3.5-flash",
@@ -738,6 +766,10 @@ User submits brain dump
 │   IF somatic log was created:                                │
 │       → Enqueue somatic_correlator                           │
 │       → Updates: potential_triggers, suggestion               │
+│                                                              │
+│   END OF DAY (cron: 11:59 PM user-local):                    │
+│       → Enqueue expense_analyzer (if expenses logged)        │
+│       → Enqueue time_analyzer (if time logged)               │
 │                                                              │
 │   WEEKLY (cron: Sunday 9 PM user-local):                     │
 │       → Enqueue insight_synthesizer                          │
@@ -1429,3 +1461,4 @@ export async function processBrainDump(userId: string, text: string) {
 |---------|------|--------|---------|
 | 1.0 | July 5, 2026 | System Architecture Team | Initial draft |
 | 1.1 | July 5, 2026 | System Architecture Team | Added Sleep & Somatic Logs domains; restructured to hybrid multi-agent architecture (sync core + 4 async specialists) |
+| 1.2 | July 5, 2026 | System Architecture Team | Added expense_analyzer and time_analyzer async specialist agents |
