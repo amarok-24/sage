@@ -7,6 +7,7 @@ export interface IHabitLog extends Document {
   completed:     boolean;
   currentStreak: number;            // Running streak at time of log
   source:        'braindump' | 'manual';
+  braindump_id?: string;            // Groups this log with the Entry docs from the same submission (unset for manual completions)
   createdAt:     Date;
 }
 
@@ -17,6 +18,7 @@ const HabitLogSchema = new Schema<IHabitLog>({
   completed: { type: Boolean, required: true, default: true },
   currentStreak: { type: Number, default: 1 },
   source:    { type: String, enum: ['braindump', 'manual'], default: 'braindump' },
+  braindump_id: { type: String, required: false, index: true },
 }, { timestamps: true });
 
 // Unique: one log per habit per day per user

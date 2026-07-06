@@ -93,7 +93,8 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
                 date,
                 completed: true,
                 currentStreak,
-                source: 'braindump'
+                source: 'braindump',
+                braindump_id
             });
             habitsUpdated.push(log._id);
         }

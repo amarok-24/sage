@@ -88,4 +88,38 @@ router.get('/summary', authenticate, async (req: AuthRequest, res: Response) => 
   }
 });
 
+// Surfaces the async specialist-agent output (weekly cross-pillar synthesis + per-entry
+// correlations/analyses) that BullMQ workers attach after a braindump is saved — none of
+// which is present in the synchronous POST /braindump response.
+router.get('/insights', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const timezone = await getUserTimezone(userId);
+    const sevenDaysAgo = getUserLocalMidnight(timezone, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+    const [weeklyInsight, recentEnrichments] = await Promise.all([
+      Entry.findOne({ userId, type: 'weekly_insight' }).sort({ date: -1 }),
+      Entry.find({
+        userId,
+        date: { $gte: sevenDaysAgo },
+        enrichment: { $exists: true, $ne: null },
+      }).sort({ date: -1 }).limit(20),
+    ]);
+
+    res.json({
+      weeklyInsight: weeklyInsight
+        ? { date: weeklyInsight.date, data: weeklyInsight.data }
+        : null,
+      recentEnrichments: recentEnrichments.map(e => ({
+        entryId: e._id,
+        type: e.type,
+        date: e.date,
+        enrichment: e.enrichment,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch insights' });
+  }
+});
+
 export default router;
