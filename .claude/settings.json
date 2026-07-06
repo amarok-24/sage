@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"$SAGE_DOC_REVIEW_ACTIVE\" ]; then exit 0; fi\nif git diff --quiet && git diff --cached --quiet; then exit 0; fi\nexport SAGE_DOC_REVIEW_ACTIVE=1\nclaude -p \"$(cat <<'DOCREVIEWPROMPT'\nReview the uncommitted git diff (git diff HEAD) in this repository, which reflects the code changes just made. Determine whether any of these documents are now inaccurate or incomplete because of the diff, and if so, edit them directly to bring them back in sync:\n\n- README.md\n- client/README.md\n- agent/README.md\n- Sage_Technical_Design_Document.md (the TDD)\n- Sage_Product_Requirements_Document.md (the PRD)\n- Sage_Brand_Identity.md (brand identity doc)\n- .agents-cli-spec.md (the spec)\n\nOnly edit a document if the diff actually invalidates something it currently states: new/removed/changed features, changed APIs, endpoints, data models, or architecture, changed setup/install/run steps, changed product scope or requirements, or changed brand voice/visual language. Make small, surgical, accurate edits that match the existing style of each doc. Do not rewrite unrelated sections, do not add speculative or unverified content, and do not touch a document that is still accurate. If nothing needs updating, make no edits and do nothing.\nDOCREVIEWPROMPT\n)\" --allowedTools \"Read,Edit,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git status:*)\" --permission-mode acceptEdits > /tmp/sage-doc-review-hook.log 2>&1",
+            "timeout": 300,
+            "async": true,
+            "statusMessage": "Reviewing docs for sync with code changes..."
+          }
+        ]
+      }
+    ]
+  }
+}
