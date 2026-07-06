@@ -93,7 +93,7 @@ pnpm install
 cp server/.env.example server/.env
 ```
 
-Fill in `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` with any long random strings. Leave `MONGODB_URI` unset — the server auto-starts a persistent embedded MongoDB for local dev (no Docker or local `mongod` needed). Leave `ADK_AGENT_URL` as `http://localhost:8001`.
+Fill in `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` with any long random strings. Leave `MONGODB_URI` unset — the server auto-starts a persistent embedded MongoDB for local dev (no Docker or local `mongod` needed). Similarly, leave `REDIS_URL` unset — the server auto-starts an in-memory Redis (`redis-memory-server`) for the BullMQ specialist-job queues; set `REDIS_URL` to point at a real instance (Docker, ElastiCache, etc.) for staging/production. Leave `ADK_AGENT_URL` as `http://localhost:8001`.
 
 ### 3. Configure the agent
 
