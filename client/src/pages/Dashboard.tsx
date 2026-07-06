@@ -3,6 +3,7 @@ import type { BrainDumpResponse } from '@sage/shared';
 import { UniversalInput } from '../components/UniversalInput';
 import { ActivityFeed } from '../components/ActivityFeed';
 import { SageLogo } from '../components/SageLogo';
+import { PromoBanner } from '../components/PromoBanner';
 
 export function Dashboard() {
   const [entries, setEntries] = useState<BrainDumpResponse[]>([]);
@@ -25,6 +26,7 @@ export function Dashboard() {
 
       {/* Main Content */}
       <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col">
+        <PromoBanner />
         <UniversalInput onResponse={handleResponse} />
 
         <div className="mt-12">

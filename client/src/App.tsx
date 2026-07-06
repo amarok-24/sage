@@ -1,19 +1,28 @@
 import { Routes, Route } from 'react-router-dom';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { Dashboard } from './pages/Dashboard';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { HomeRoute } from './components/HomeRoute';
+import { LoginRoute } from './components/LoginRoute';
+import { RegisterRoute } from './components/RegisterRoute';
+import { DashboardV2 } from './v2/pages/DashboardV2';
 
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<LoginRoute />} />
+      <Route path="/register" element={<RegisterRoute />} />
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <HomeRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/v2"
+        element={
+          <ProtectedRoute>
+            <DashboardV2 />
           </ProtectedRoute>
         }
       />
