@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 from datetime import datetime
@@ -10,30 +10,38 @@ class FoodItem(BaseModel):
     protein_g: float
     carbs_g: float
     fat_g: float
+    confidence: Literal['high', 'medium', 'low']
 
-class NutritionSummary(BaseModel):
+class NutritionData(BaseModel):
+    food_items: List[FoodItem]
     total_calories: int
     total_protein_g: float
     total_carbs_g: float
     total_fat_g: float
-
-class NutritionData(BaseModel):
-    food_items: List[FoodItem]
-    total_nutrition_summary: NutritionSummary
+    meal_type: Literal['breakfast', 'lunch', 'dinner', 'snack', 'unspecified']
 
 class ExpenseData(BaseModel):
     amount: float
     currency: str = "USD"
-    category: str
+    category: Literal[
+        'food', 'groceries', 'transport', 'utility', 'entertainment',
+        'health', 'education', 'shopping', 'investment', 'savings',
+        'rent', 'subscription', 'gift', 'other',
+    ]
     merchant_inferred: str
+    description: str
 
 class TimeData(BaseModel):
     duration_minutes: int
-    activity_category: str
+    activity_category: Literal[
+        'deep-work', 'study', 'exercise', 'commute', 'meeting',
+        'creative', 'chores', 'social', 'rest', 'other',
+    ]
     description: str
 
 class HabitData(BaseModel):
     habit_name: str
+    matched_phrase: str
     completed: bool = True
 
 class SleepQuality(str, Enum):
@@ -64,7 +72,7 @@ class JournalData(BaseModel):
 
 class SageAgentOutput(BaseModel):
     """The overarching schema containing all possible domain data for a given journal entry."""
-    nutrition: Optional[NutritionData] = None
+    nutrition: Optional[List[NutritionData]] = None
     expenses: Optional[List[ExpenseData]] = None
     time_logs: Optional[List[TimeData]] = None
     habits: Optional[List[HabitData]] = None

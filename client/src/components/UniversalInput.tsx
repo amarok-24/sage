@@ -42,8 +42,8 @@ export function UniversalInput({ onResponse }: UniversalInputProps) {
         throw new Error('Failed to process braindump');
       }
 
-      const data = await res.json();
-      onResponse(data);
+      const { parsed_data } = await res.json();
+      onResponse(parsed_data);
       setText('');
     } catch (error) {
       console.error(error);

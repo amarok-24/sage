@@ -44,7 +44,9 @@ def process_nutrition_impl(node_input: dict) -> str | None:
     data = node_input.get("nutrition")
     if not data:
         return None
-    return f"🍔 Logged Nutrition: {len(data.get('food_items', []))} items, {data.get('total_nutrition_summary', {}).get('total_calories')} total calories."
+    total_items = sum(len(meal.get('food_items', [])) for meal in data)
+    total_calories = sum(meal.get('total_calories', 0) for meal in data)
+    return f"🍔 Logged Nutrition: {total_items} items, {total_calories} total calories."
 
 def process_expense_impl(node_input: dict) -> str | None:
     data = node_input.get("expenses")
