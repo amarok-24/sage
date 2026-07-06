@@ -3,26 +3,29 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { Entry } from '../models/Entry';
 import { HabitLog } from '../models/HabitLog';
 import { User } from '../models/User';
+import { getUserLocalDayBounds, getLocalCalendarAnchor, getUserLocalMidnight } from '../utils/timezone';
 
 const router = Router();
+
+async function getUserTimezone(userId: string | undefined): Promise<string> {
+  const user = await User.findById(userId).select('preferences.timezone').lean();
+  return user?.preferences?.timezone || 'UTC';
+}
 
 router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // User's local midnight should ideally be used based on timezone, but server time is used for simplicity
-
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const timezone = await getUserTimezone(userId);
+    const { start, end } = getUserLocalDayBounds(timezone);
 
     const entries = await Entry.find({
       userId,
-      date: { $gte: today, $lt: tomorrow }
+      date: { $gte: start, $lt: end }
     }).sort({ createdAt: -1 });
 
     const habits = await HabitLog.find({
       userId,
-      date: { $gte: today, $lt: tomorrow }
+      date: { $gte: start, $lt: end }
     });
 
     res.json({ entries, habits });
@@ -34,28 +37,33 @@ router.get('/today', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/summary', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
+    const timezone = await getUserTimezone(userId);
     const { range, date } = req.query; // 'week' or 'month', date string
-    
-    let startDate = new Date();
-    if (date) startDate = new Date(date as string);
-    startDate.setHours(0,0,0,0);
 
-    let endDate = new Date(startDate);
+    const reference = date ? new Date(date as string) : new Date();
+    const anchor = getLocalCalendarAnchor(timezone, reference);
+
+    let start = new Date(anchor);
+    let end: Date;
     if (range === 'month') {
-      startDate.setDate(1);
-      endDate.setMonth(endDate.getMonth() + 1);
-      endDate.setDate(1);
+      start.setUTCDate(1);
+      end = new Date(start);
+      end.setUTCMonth(end.getUTCMonth() + 1);
     } else {
       // Default week
-      const day = startDate.getDay();
-      const diff = startDate.getDate() - day + (day == 0 ? -6 : 1); // adjust when day is sunday
-      startDate.setDate(diff);
-      endDate.setDate(startDate.getDate() + 7);
+      const day = start.getUTCDay();
+      const diff = start.getUTCDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+      start.setUTCDate(diff);
+      end = new Date(start);
+      end.setUTCDate(start.getUTCDate() + 7);
     }
+
+    const startBound = getUserLocalMidnight(timezone, start);
+    const endBound = getUserLocalMidnight(timezone, end);
 
     const entries = await Entry.find({
       userId,
-      date: { $gte: startDate, $lt: endDate }
+      date: { $gte: startBound, $lt: endBound }
     });
 
     let totalCalories = 0;

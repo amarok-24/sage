@@ -4,11 +4,13 @@ import { braindumpLimiter } from '../middleware/rateLimiter';
 import { processBrainDump } from '../services/agent.service';
 import { Entry } from '../models/Entry';
 import { HabitLog } from '../models/HabitLog';
+import { User } from '../models/User';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { validate } from '../middleware/validate';
 import logger from '../utils/logger';
 import { enqueue } from '../queues/queues';
+import { getUserLocalMidnight } from '../utils/timezone';
 
 const router = Router();
 
@@ -21,34 +23,36 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
   try {
     const { text, timestamp } = req.body;
     const userId = req.userId!;
-    
+
     // Call ADK agent
     const parsedResult = await processBrainDump(userId, text);
-    
+
     const braindump_id = nanoid();
-    const date = timestamp ? new Date(timestamp) : new Date(); // Use provided timestamp or current date
-    date.setHours(0,0,0,0); // Logical date at midnight
-    
+    const reference = timestamp ? new Date(timestamp) : new Date(); // Use provided timestamp or current date
+    const user = await User.findById(userId).select('preferences.timezone').lean();
+    const timezone = user?.preferences?.timezone || 'UTC';
+    const date = getUserLocalMidnight(timezone, reference); // Logical date at midnight, in the user's local timezone
+
     const entriesCreated = [];
-    
+
     // Save Nutrition
     for (const item of parsedResult.nutrition) {
       const entry = await Entry.create({ userId, type: 'nutrition', date, raw_text: text, braindump_id, data: item });
       entriesCreated.push(entry._id);
     }
-    
+
     // Save Expenses
     for (const item of parsedResult.expenses) {
       const entry = await Entry.create({ userId, type: 'expense', date, raw_text: text, braindump_id, data: item });
       entriesCreated.push(entry._id);
     }
-    
+
     // Save Time Logs
     for (const item of parsedResult.time_logs) {
       const entry = await Entry.create({ userId, type: 'time_log', date, raw_text: text, braindump_id, data: item });
       entriesCreated.push(entry._id);
     }
-    
+
     // Save Sleep Log
     if (parsedResult.sleep) {
       const entry = await Entry.create({ userId, type: 'sleep', date, raw_text: text, braindump_id, data: parsedResult.sleep });
@@ -69,7 +73,7 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
       entriesCreated.push(entry._id);
       await enqueue('journal-enrich', { entryId: String(entry._id) });
     }
-    
+
     // Update Habit Logs
     const habitsUpdated = [];
     for (const item of parsedResult.habits_completed) {
@@ -78,12 +82,11 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
         const existingLog = await HabitLog.findOne({ userId, habitName: item.habit_name, date });
         if (!existingLog) {
             // Find yesterday's log to calculate streak
-            const yesterday = new Date(date);
-            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterday = getUserLocalMidnight(timezone, new Date(reference.getTime() - 24 * 60 * 60 * 1000));
             const yesterdayLog = await HabitLog.findOne({ userId, habitName: item.habit_name, date: yesterday });
-            
+
             const currentStreak = yesterdayLog ? yesterdayLog.currentStreak + 1 : 1;
-            
+
             const log = await HabitLog.create({
                 userId,
                 habitName: item.habit_name,
@@ -96,14 +99,14 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
         }
       }
     }
-    
+
     res.status(200).json({
       braindump_id,
       entries_created: entriesCreated,
       habits_updated: habitsUpdated,
       parsed_data: parsedResult // Returning for UI to display instantly
     });
-    
+
   } catch (error: any) {
     logger.error("Braindump processing error:", error);
     res.status(500).json({ error: 'Failed to process braindump', details: error.message });
