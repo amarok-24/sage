@@ -5,10 +5,10 @@ import { submitBrainDump } from '../lib/braindump';
 import { hydrateFeed } from '../lib/hydrateFeed';
 import { apiFetch } from '../lib/api';
 import { useToast } from '../hooks/useToast';
-import { UniversalInput } from '../components/UniversalInput';
+import { AppShell } from '../components/AppShell';
+import { Logo } from '../components/Logo';
+import { Composer } from '../components/Composer';
 import { ActivityFeed } from '../components/ActivityFeed';
-import { SageLogo } from '../components/SageLogo';
-import { PromoBanner } from '../components/PromoBanner';
 import { InsightsPanel } from '../components/InsightsPanel';
 
 export function Dashboard() {
@@ -66,32 +66,26 @@ export function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
-
-      {/* Header */}
-      <header className="w-full max-w-2xl mx-auto mt-12 mb-10 text-center">
+    <AppShell>
+      <header className="w-full max-w-2xl mx-auto mt-4 sm:mt-8 mb-10 text-center">
         <div className="inline-flex items-center justify-center mb-4">
-          <SageLogo size={56} />
+          <Logo size={56} />
         </div>
-        <h1 className="text-4xl md:text-5xl font-serif text-sage-brown-900 mb-3 tracking-tight">Sage</h1>
-        <p className="text-sage-brown-500 font-serif italic">Grow your awareness.</p>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-sans font-semibold tracking-tight mb-3 bg-clip-text text-transparent bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)]">
+          Sage
+        </h1>
+        <p className="text-[var(--nova-text-muted)] font-sans">Grow your awareness.</p>
       </header>
 
-      {/* Main Content */}
       <main className="w-full max-w-2xl mx-auto flex-1 flex flex-col">
-        <PromoBanner />
-        <UniversalInput
+        <Composer
           onSubmitStart={handleSubmitStart}
           onSubmitSuccess={handleSubmitSuccess}
           onSubmitError={handleSubmitError}
         />
-
-        <div className="mt-12">
-          <InsightsPanel />
-          <ActivityFeed items={items} onRetry={handleRetry} isLoading={isHydrating} />
-        </div>
+        <InsightsPanel />
+        <ActivityFeed items={items} onRetry={handleRetry} isLoading={isHydrating} />
       </main>
-
-    </div>
+    </AppShell>
   );
 }

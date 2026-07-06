@@ -4,13 +4,15 @@
 
 @layer base {
   body {
-    @apply bg-sage-bg text-sage-brown-900 font-sans antialiased;
+    @apply bg-[var(--nova-bg)] text-[var(--nova-text-primary)] font-sans antialiased transition-colors duration-500;
   }
 }
 
-/* v2 "nova" theme tokens, scoped to the v2 subtree via data-nova-theme.
-   Never applied to <html>/<body> so v1 is unaffected. */
-[data-nova-theme='dark'] {
+/* Theme tokens. The `data-theme` attribute is set on <html> (default via
+   index.html, then kept in sync by AppShell/useThemeMode) so these vars are
+   available app-wide — including to ProtectedRoute's loading spinner, which
+   renders before AppShell ever mounts. */
+[data-theme='dark'] {
   --nova-bg: #0b0d14;
   --nova-surface: #12141f;
   --nova-border: rgba(255, 255, 255, 0.1);
@@ -20,7 +22,7 @@
   --nova-cyan: #06b6d4;
 }
 
-[data-nova-theme='light'] {
+[data-theme='light'] {
   --nova-bg: #f7f7fb;
   --nova-surface: #ffffff;
   --nova-border: rgba(15, 15, 20, 0.08);

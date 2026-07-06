@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { RegisterSchema } from '@sage/shared';
 import { useAuth } from '../hooks/useAuth';
-import { SageLogo } from '../components/SageLogo';
+import { AppShell } from '../components/AppShell';
+import { Logo } from '../components/Logo';
 
 export function Register() {
   const { register } = useAuth();
@@ -35,81 +37,88 @@ export function Register() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col items-center mb-8">
-          <SageLogo size={48} className="mb-4" />
-          <h1 className="text-3xl font-serif text-sage-brown-900 tracking-tight">Sage</h1>
-          <p className="text-sage-brown-500 font-serif italic mt-1">Grow your awareness.</p>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white rounded-3xl shadow-sm border border-sage-brown-100 p-6 space-y-4"
-        >
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-sage-brown-700 mb-1">
-              Name
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-sage-brown-200 px-3 py-2 font-sans text-sage-brown-900 outline-none focus:ring-2 focus:ring-sage-green-200"
-              autoComplete="name"
-              required
-            />
+    <AppShell>
+      <div className="min-h-[80vh] flex flex-col items-center justify-center">
+        <div className="w-full max-w-sm">
+          <div className="flex flex-col items-center mb-8">
+            <Logo size={48} className="mb-4" />
+            <h1 className="text-2xl sm:text-3xl font-sans font-semibold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)]">
+              Sage
+            </h1>
+            <p className="text-[var(--nova-text-muted)] font-sans mt-1">Grow your awareness.</p>
           </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-sage-brown-700 mb-1">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-sage-brown-200 px-3 py-2 font-sans text-sage-brown-900 outline-none focus:ring-2 focus:ring-sage-green-200"
-              autoComplete="email"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-sage-brown-700 mb-1">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-sage-brown-200 px-3 py-2 font-sans text-sage-brown-900 outline-none focus:ring-2 focus:ring-sage-green-200"
-              autoComplete="new-password"
-              required
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded-xl bg-sage-green-600 text-white py-2.5 font-medium hover:bg-sage-green-700 transition-colors disabled:opacity-50"
+          <motion.form
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            onSubmit={handleSubmit}
+            className="bg-[var(--nova-surface)]/60 backdrop-blur-xl rounded-3xl border border-[var(--nova-border)] p-6 space-y-4"
           >
-            {isSubmitting ? 'Creating account...' : 'Create account'}
-          </button>
-        </form>
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-[var(--nova-text-muted)] mb-1">
+                Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full min-h-[44px] rounded-xl bg-[var(--nova-bg)]/40 border border-[var(--nova-border)] px-3 py-2 font-sans text-[var(--nova-text-primary)] outline-none focus:border-[var(--nova-violet)] focus:ring-2 focus:ring-[var(--nova-violet)]/30"
+                autoComplete="name"
+                required
+              />
+            </div>
 
-        <p className="text-center text-sm text-sage-brown-500 mt-6">
-          Already have an account?{' '}
-          <Link to="/login" className="text-sage-green-700 font-medium hover:underline">
-            Sign in
-          </Link>
-        </p>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-[var(--nova-text-muted)] mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full min-h-[44px] rounded-xl bg-[var(--nova-bg)]/40 border border-[var(--nova-border)] px-3 py-2 font-sans text-[var(--nova-text-primary)] outline-none focus:border-[var(--nova-violet)] focus:ring-2 focus:ring-[var(--nova-violet)]/30"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-[var(--nova-text-muted)] mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full min-h-[44px] rounded-xl bg-[var(--nova-bg)]/40 border border-[var(--nova-border)] px-3 py-2 font-sans text-[var(--nova-text-primary)] outline-none focus:border-[var(--nova-violet)] focus:ring-2 focus:ring-[var(--nova-violet)]/30"
+                autoComplete="new-password"
+                required
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full min-h-[44px] rounded-xl bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)] text-white py-2.5 font-medium shadow-glow transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {isSubmitting ? 'Creating account...' : 'Create account'}
+            </button>
+          </motion.form>
+
+          <p className="text-center text-sm text-[var(--nova-text-muted)] mt-6">
+            Already have an account?{' '}
+            <Link to="/login" className="text-[var(--nova-text-primary)] font-medium hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

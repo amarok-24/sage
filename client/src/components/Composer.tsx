@@ -1,18 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import type { BrainDumpResponse } from '@sage/shared';
+import { motion } from 'framer-motion';
 import { SendHorizonal, Mic } from 'lucide-react';
 import { submitBrainDump } from '../lib/braindump';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useToast } from '../hooks/useToast';
 import { cn } from '../lib/utils';
 
-interface UniversalInputProps {
+interface ComposerProps {
   onSubmitStart: (id: string, rawText: string) => void;
   onSubmitSuccess: (id: string, data: BrainDumpResponse) => void;
   onSubmitError: (id: string, message: string) => void;
 }
 
-export function UniversalInput({ onSubmitStart, onSubmitSuccess, onSubmitError }: UniversalInputProps) {
+export function Composer({ onSubmitStart, onSubmitSuccess, onSubmitError }: ComposerProps) {
   const [text, setText] = useState('');
   const [inFlightCount, setInFlightCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -21,7 +22,6 @@ export function UniversalInput({ onSubmitStart, onSubmitSuccess, onSubmitError }
     onTranscriptChange: setText,
   });
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -60,11 +60,22 @@ export function UniversalInput({ onSubmitStart, onSubmitSuccess, onSubmitError }
   const isProcessing = inFlightCount > 0;
 
   return (
-    <div className={cn(
-      "w-full max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-3xl shadow-sm border border-sage-brown-100 transition-all duration-700 ease-in-out relative",
-      isProcessing && "animate-breathe shadow-md border-sage-green-200 ring-2 ring-sage-green-100 ring-opacity-50"
-    )}>
-      <div className="relative">
+    <div className="relative w-full">
+      <div
+        className={cn(
+          'absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)] opacity-20 blur-xl transition-opacity duration-700',
+          isProcessing && 'opacity-40 animate-pulse-glow'
+        )}
+      />
+      <motion.div
+        animate={isProcessing ? { scale: [1, 1.01, 1] } : { scale: 1 }}
+        transition={{ duration: 2, repeat: isProcessing ? Infinity : 0, ease: 'easeInOut' }}
+        className={cn(
+          'relative w-full p-4 sm:p-5 md:p-6 rounded-[2rem] backdrop-blur-xl transition-all duration-500',
+          'bg-[var(--nova-surface)]/60 border border-[var(--nova-border)]',
+          isProcessing && 'border-[var(--nova-violet)]/50'
+        )}
+      >
         <textarea
           ref={textareaRef}
           value={text}
@@ -72,23 +83,24 @@ export function UniversalInput({ onSubmitStart, onSubmitSuccess, onSubmitError }
           onKeyDown={handleKeyDown}
           placeholder="What's on your mind? (e.g. Spent $15 on lunch, meditated for 10 mins...)"
           className={cn(
-            "w-full bg-transparent border-none focus:ring-0 resize-none font-serif text-lg md:text-xl text-sage-brown-900 placeholder:text-sage-brown-400 outline-none",
-            "min-h-[60px] overflow-hidden"
+            'w-full bg-transparent border-none focus:ring-0 resize-none font-sans text-base sm:text-lg md:text-xl outline-none',
+            'text-[var(--nova-text-primary)] placeholder:text-[var(--nova-text-muted)]',
+            'min-h-[60px] overflow-hidden'
           )}
           rows={1}
         />
 
-        <div className="absolute bottom-0 right-0 transform translate-y-1/2 md:translate-y-0 md:bottom-2 flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2 mt-3">
           {isVoiceSupported && (
             <button
               onClick={() => toggleListening(text)}
               className={cn(
-                "p-3 rounded-full flex items-center justify-center transition-all duration-300",
+                'min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-all duration-300',
                 isListening
-                  ? "bg-red-50 text-red-600 ring-2 ring-red-200 animate-pulse"
-                  : "bg-sage-brown-100 text-sage-brown-600 hover:bg-sage-brown-200"
+                  ? 'bg-red-500/10 text-red-400 ring-2 ring-red-400/40 animate-pulse'
+                  : 'bg-[var(--nova-surface)] text-[var(--nova-text-muted)] hover:text-[var(--nova-text-primary)] border border-[var(--nova-border)]'
               )}
-              aria-label={isListening ? "Stop voice input" : "Start voice input"}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
             >
               <Mic className="w-5 h-5" />
             </button>
@@ -97,17 +109,17 @@ export function UniversalInput({ onSubmitStart, onSubmitSuccess, onSubmitError }
             onClick={handleSubmit}
             disabled={!text.trim()}
             className={cn(
-              "p-3 rounded-full flex items-center justify-center transition-all duration-300",
+              'min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-all duration-300',
               text.trim()
-                ? "bg-sage-green-600 text-white hover:bg-sage-green-700 shadow-sm"
-                : "bg-sage-brown-100 text-sage-brown-300 cursor-not-allowed"
+                ? 'bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)] text-white shadow-glow'
+                : 'bg-[var(--nova-surface)] text-[var(--nova-text-muted)] cursor-not-allowed border border-[var(--nova-border)]'
             )}
             aria-label="Submit"
           >
             <SendHorizonal className="w-5 h-5" />
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

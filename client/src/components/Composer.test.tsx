@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { NovaComposer } from './NovaComposer';
-import { ToastProvider } from '../../contexts/ToastContext';
+import { Composer } from './Composer';
+import { ToastProvider } from '../contexts/ToastContext';
 import '@testing-library/jest-dom';
 
 global.fetch = vi.fn();
 
-function renderComposer(props: Partial<React.ComponentProps<typeof NovaComposer>> = {}) {
+function renderComposer(props: Partial<React.ComponentProps<typeof Composer>> = {}) {
   return render(
     <ToastProvider>
-      <NovaComposer
+      <Composer
         onSubmitStart={() => {}}
         onSubmitSuccess={() => {}}
         onSubmitError={() => {}}
@@ -19,7 +19,7 @@ function renderComposer(props: Partial<React.ComponentProps<typeof NovaComposer>
   );
 }
 
-describe('NovaComposer', () => {
+describe('Composer', () => {
   it('renders the textarea and submit button', () => {
     renderComposer();
 
@@ -107,7 +107,7 @@ class MockSpeechRecognition extends EventTarget {
   }
 }
 
-describe('NovaComposer voice input', () => {
+describe('Composer voice input', () => {
   beforeEach(() => {
     MockSpeechRecognition.instances = [];
     (window as unknown as { SpeechRecognition: unknown }).SpeechRecognition = MockSpeechRecognition;
