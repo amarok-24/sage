@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Router } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -45,6 +45,13 @@ app.use('/api/habits', habitsRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/user', userRoutes);
+
+// Bull Board can't be built until the queues exist (after connectRedis()/initQueues()
+// in server.ts), but it needs to be mounted here — before errorHandler — so its
+// errors flow through the same error-handling middleware as the rest of the API.
+// server.ts attaches the real router into this slot once queues are ready.
+export const adminRouter = Router();
+app.use('/admin/queues', adminRouter);
 
 // Swagger Documentation
 const swaggerFile = path.resolve(process.cwd(), 'swagger-output.json');

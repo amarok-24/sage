@@ -8,6 +8,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { validate } from '../middleware/validate';
 import logger from '../utils/logger';
+import { enqueue } from '../queues/queues';
 
 const router = Router();
 
@@ -52,18 +53,21 @@ router.post('/', authenticate, braindumpLimiter, validate(BraindumpRequestSchema
     if (parsedResult.sleep) {
       const entry = await Entry.create({ userId, type: 'sleep', date, raw_text: text, braindump_id, data: parsedResult.sleep });
       entriesCreated.push(entry._id);
+      await enqueue('sleep-analyze', { entryId: String(entry._id) });
     }
-    
+
     // Save Somatic Logs
     for (const item of parsedResult.somatic_logs) {
       const entry = await Entry.create({ userId, type: 'somatic_log', date, raw_text: text, braindump_id, data: item });
       entriesCreated.push(entry._id);
+      await enqueue('somatic-correlate', { entryId: String(entry._id) });
     }
-    
+
     // Save Journal
     if (parsedResult.journal) {
       const entry = await Entry.create({ userId, type: 'journal', date, raw_text: text, braindump_id, data: parsedResult.journal });
       entriesCreated.push(entry._id);
+      await enqueue('journal-enrich', { entryId: String(entry._id) });
     }
     
     // Update Habit Logs

@@ -2,18 +2,20 @@ import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { Entry } from '../models/Entry';
 import { nanoid } from 'nanoid';
+import { enqueue } from '../queues/queues';
 
 const router = Router();
 
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { text, media_urls = [] } = req.body;
-    
-    // AI Enrichment could happen here or asynchronously
+
+    // mood_score/tags/summary_snippet are filled in asynchronously by the
+    // journal_enricher specialist agent once the job below completes.
     const data = {
       text,
       media_urls,
-      mood_score: 5, // Default/Mock for now
+      mood_score: null,
       tags: [],
       summary_snippet: text.substring(0, 50) + '...'
     };
@@ -26,6 +28,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       braindump_id: nanoid(), // Since it's a standalone journal, it gets its own ID
       data
     });
+
+    await enqueue('journal-enrich', { entryId: String(entry._id) });
 
     res.status(201).json({ entry });
   } catch (error) {
