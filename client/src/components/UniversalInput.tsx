@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import type { BrainDumpResponse } from '@sage/shared';
-import { SendHorizonal, Loader2 } from 'lucide-react';
+import { SendHorizonal, Loader2, Mic } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { apiFetch } from '../lib/api';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -17,6 +18,9 @@ export function UniversalInput({ onResponse }: UniversalInputProps) {
   const [text, setText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { isSupported: isVoiceSupported, isListening, toggle: toggleListening } = useSpeechRecognition({
+    onTranscriptChange: setText,
+  });
 
   // Auto-resize textarea
   useEffect(() => {
@@ -80,7 +84,24 @@ export function UniversalInput({ onResponse }: UniversalInputProps) {
           rows={1}
         />
         
-        <div className="absolute bottom-0 right-0 transform translate-y-1/2 md:translate-y-0 md:bottom-2">
+        <div className="absolute bottom-0 right-0 transform translate-y-1/2 md:translate-y-0 md:bottom-2 flex items-center gap-2">
+          {isVoiceSupported && (
+            <button
+              onClick={() => toggleListening(text)}
+              disabled={isProcessing}
+              className={cn(
+                "p-3 rounded-full flex items-center justify-center transition-all duration-300",
+                isProcessing
+                  ? "bg-sage-brown-100 text-sage-brown-300 cursor-not-allowed"
+                  : isListening
+                  ? "bg-red-50 text-red-600 ring-2 ring-red-200 animate-pulse"
+                  : "bg-sage-brown-100 text-sage-brown-600 hover:bg-sage-brown-200"
+              )}
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+          )}
           <button
             onClick={handleSubmit}
             disabled={!text.trim() || isProcessing}
