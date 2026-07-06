@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'sleep' | 'somatic_log' | 'journal';
+export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'sleep' | 'somatic_log' | 'journal' | 'weekly_insight';
 
 export interface IEntry extends Document {
   userId:       Types.ObjectId;
@@ -8,7 +8,8 @@ export interface IEntry extends Document {
   date:         Date;          // Logical date (user's local date at midnight)
   raw_text:     string;        // Original brain dump text
   braindump_id: string;        // Groups all entries from one brain dump
-  data:         Record<string, any>;   // Polymorphic payload
+  data:         Record<string, any>;   // Polymorphic payload from the router agent
+  enrichment?:  Record<string, any>;   // Specialist agent output, keyed by output_key (e.g. journal_enrichment, sleep_analysis)
   createdAt:    Date;
   updatedAt:    Date;
 }
@@ -20,13 +21,14 @@ const EntrySchema = new Schema<IEntry>({
   },
   type: {
     type: String,
-    enum: ['nutrition', 'expense', 'time_log', 'sleep', 'somatic_log', 'journal'],
+    enum: ['nutrition', 'expense', 'time_log', 'sleep', 'somatic_log', 'journal', 'weekly_insight'],
     required: true, index: true,
   },
   date:         { type: Date, required: true, index: true },
   raw_text:     { type: String, required: true },
   braindump_id: { type: String, required: true, index: true },
   data:         { type: Schema.Types.Mixed, required: true },
+  enrichment:   { type: Schema.Types.Mixed, required: false },
 }, { timestamps: true });
 
 // Compound indexes

@@ -14,12 +14,18 @@ interface IUserPreferences {
   dailyProteinGoal?: number;
 }
 
+interface IJobState {
+  lastEodRunDate?:    string;   // "YYYY-MM-DD" in the user's local timezone, guards the hourly sweep from double-firing eod jobs
+  lastWeeklyRunDate?: string;   // "YYYY-MM-DD" of the last Sunday the weekly insight job ran
+}
+
 export interface IUser extends Document {
   email:                string;
   passwordHash:         string;
   name:                 string;
   habits:               IHabitDefinition[];
   preferences:          IUserPreferences;
+  jobState:             IJobState;
   refreshTokenVersion:  number;   // Incremented on logout / password change
   createdAt:            Date;
   updatedAt:            Date;
@@ -43,6 +49,10 @@ const UserSchema = new Schema<IUser>({
     timezone:          { type: String, default: 'Asia/Kolkata' },
     dailyCalorieGoal:  { type: Number },
     dailyProteinGoal:  { type: Number },
+  },
+  jobState: {
+    lastEodRunDate:    { type: String },
+    lastWeeklyRunDate: { type: String },
   },
   refreshTokenVersion: { type: Number, default: 0 },
 }, { timestamps: true });

@@ -79,3 +79,37 @@ class SageAgentOutput(BaseModel):
     sleep: Optional[SleepData] = None
     somatic_logs: Optional[List[SomaticData]] = None
     journal: Optional[JournalData] = None
+
+
+# --- Async specialist output schemas (Sage_Technical_Design_Document.md 4.6) ---
+
+class JournalMetadata(BaseModel):
+    mood_score: int = Field(ge=1, le=10)
+    tags: List[str]
+    summary_snippet: str
+
+class SleepAnalysis(BaseModel):
+    consistency_score: int = Field(ge=1, le=10)
+    circadian_alignment: Literal['aligned', 'slightly_shifted', 'misaligned']
+    recommendation: str
+
+class SomaticCorrelation(BaseModel):
+    potential_triggers: List[str]
+    confidence: Literal['high', 'medium', 'low']
+    suggestion: str
+
+class ExpenseAnalysis(BaseModel):
+    anomaly_flag: bool
+    subscription_creep: str
+    insight: str
+
+class TimeAnalysis(BaseModel):
+    deep_work_ratio: float
+    time_drain: str
+    optimization_tip: str
+
+class WeeklyInsight(BaseModel):
+    top_insight: str
+    supporting_data: List[str]
+    growth_area: str
+    celebration: str

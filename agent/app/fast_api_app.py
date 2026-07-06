@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import contextlib
+import json
 import os
 from collections.abc import AsyncIterator
 
@@ -45,15 +46,28 @@ AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.agent import app as adk_app
     from app.agent import root_agent
+    from app.specialists import SPECIALIST_APPS
+
+    session_service = services.get_session_service()
+    artifact_service = services.get_artifact_service()
 
     runner = Runner(
         app=adk_app,
-        session_service=services.get_session_service(),
-        artifact_service=services.get_artifact_service(),
+        session_service=session_service,
+        artifact_service=artifact_service,
         auto_create_session=True,
     )
     app.state.runner = runner
     app.state.agent_app_name = adk_app.name
+    app.state.specialist_runners = {
+        name: Runner(
+            app=specialist_app,
+            session_service=session_service,
+            artifact_service=artifact_service,
+            auto_create_session=True,
+        )
+        for name, specialist_app in SPECIALIST_APPS.items()
+    }
     await attach_a2a_routes(
         app,
         agent=root_agent,
@@ -129,8 +143,7 @@ async def process_braindump(request: Request, payload: BrainDumpRequest):
         
     if not router_output_str:
         raise HTTPException(status_code=500, detail="Agent produced no parsed output")
-        
-    import json
+
     try:
         router_output = json.loads(router_output_str)
     except Exception as e:
@@ -148,6 +161,48 @@ async def process_braindump(request: Request, payload: BrainDumpRequest):
         "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     }
     return response_data
+
+
+class SpecialistRequest(BaseModel):
+    user_id: str
+    context: dict
+
+
+@app.post("/specialists/{name}")
+async def run_specialist(name: str, request: Request, payload: SpecialistRequest):
+    specialist_runners = request.app.state.specialist_runners
+    runner: Runner | None = specialist_runners.get(name)
+    if runner is None:
+        raise HTTPException(status_code=404, detail=f"Unknown specialist: {name}")
+
+    session = await runner.session_service.create_session(
+        app_name=name,
+        user_id=payload.user_id,
+    )
+
+    user_message = types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=json.dumps(payload.context))],
+    )
+
+    output_str = None
+    async for event in runner.run_async(
+        session_id=session.id,
+        user_id=payload.user_id,
+        new_message=user_message,
+    ):
+        if event.author == name and event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    output_str = part.text
+
+    if not output_str:
+        raise HTTPException(status_code=500, detail=f"Specialist '{name}' produced no output")
+
+    try:
+        return json.loads(output_str)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse specialist JSON output: {e}")
 
 
 # Main execution
