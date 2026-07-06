@@ -1,7 +1,6 @@
 import { createContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import * as api from '../lib/api';
 import type { SageUser } from '../lib/api';
-import { DEMO_EMAIL, DEMO_PASSWORD } from '../lib/demoUser';
 
 interface AuthContextValue {
   user: SageUser | null;
@@ -25,13 +24,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
-        if (import.meta.env.DEV) {
-          // Local dev: skip the login screen entirely by signing in as the seeded demo user.
-          const { user: demoUser } = await api.login(DEMO_EMAIL, DEMO_PASSWORD);
-          setUser(demoUser);
-        } else {
-          const restoredUser = await api.restoreSession();
+        const restoredUser = await api.restoreSession();
+        if (restoredUser) {
           setUser(restoredUser);
+        } else if (import.meta.env.DEV) {
+          // Local dev, no existing session: skip the login screen by signing in as the seeded demo user.
+          const { user: demoUser } = await api.demoLogin();
+          setUser(demoUser);
         }
       } catch (error) {
         console.warn('Failed to establish a session on load:', error);

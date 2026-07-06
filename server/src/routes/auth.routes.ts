@@ -6,6 +6,7 @@ import { validate } from '../middleware/validate';
 import { authLimiter } from '../middleware/rateLimiter';
 import { RegisterSchema, LoginSchema } from '@sage/shared';
 import logger from '../utils/logger';
+import { DEMO_EMAIL } from '../config/seedDemoUser';
 
 const router = Router();
 
@@ -94,6 +95,43 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req: Request, r
   } catch (error) {
     logger.error("Login error:", error);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+router.post('/demo-login', authLimiter, async (req: Request, res: Response) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  try {
+    const user = await User.findOne({ email: DEMO_EMAIL });
+    if (!user) {
+      return res.status(404).json({ error: 'Demo user not available' });
+    }
+
+    const accessToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_ACCESS_SECRET as string,
+      { expiresIn: (process.env.JWT_ACCESS_EXPIRY || '15m') as any }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user._id, version: user.refreshTokenVersion },
+      process.env.JWT_REFRESH_SECRET as string,
+      { expiresIn: (process.env.JWT_REFRESH_EXPIRY || '7d') as any }
+    );
+
+    res.cookie('sage_refresh', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    res.status(200).json({ user: { id: user._id, email: user.email, name: user.name }, accessToken });
+  } catch (error) {
+    logger.error("Demo login error:", error);
+    res.status(500).json({ error: 'Demo login failed' });
   }
 });
 

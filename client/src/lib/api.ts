@@ -90,6 +90,16 @@ export async function register(email: string, password: string, name: string): P
   return data;
 }
 
+export async function demoLogin(): Promise<AuthResponse> {
+  const res = await rawFetch('/auth/demo-login', { method: 'POST' });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res, 'Demo login failed'));
+  }
+  const data: AuthResponse = await res.json();
+  accessToken = data.accessToken;
+  return data;
+}
+
 export async function logout(): Promise<void> {
   await rawFetch('/auth/logout', { method: 'POST' });
   accessToken = null;

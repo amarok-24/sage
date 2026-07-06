@@ -83,6 +83,22 @@
         }
       }
     },
+    "/api/auth/demo-login": {
+      "post": {
+        "description": "",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
     "/api/auth/refresh": {
       "post": {
         "description": "",
