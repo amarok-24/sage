@@ -1,26 +1,40 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { NovaComposer } from './NovaComposer';
+import { ToastProvider } from '../../contexts/ToastContext';
 import '@testing-library/jest-dom';
 
 global.fetch = vi.fn();
 
+function renderComposer(props: Partial<React.ComponentProps<typeof NovaComposer>> = {}) {
+  return render(
+    <ToastProvider>
+      <NovaComposer
+        onSubmitStart={() => {}}
+        onSubmitSuccess={() => {}}
+        onSubmitError={() => {}}
+        {...props}
+      />
+    </ToastProvider>
+  );
+}
+
 describe('NovaComposer', () => {
   it('renders the textarea and submit button', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     expect(screen.getByPlaceholderText(/What's on your mind\?/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Submit/i })).toBeInTheDocument();
   });
 
   it('button is disabled when text is empty', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     expect(screen.getByRole('button', { name: /Submit/i })).toBeDisabled();
   });
 
   it('button becomes enabled when text is entered', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     const textarea = screen.getByPlaceholderText(/What's on your mind\?/i);
     fireEvent.change(textarea, { target: { value: 'Had a great lunch' } });
@@ -29,28 +43,47 @@ describe('NovaComposer', () => {
   });
 
   it('does not render a mic button when SpeechRecognition is unsupported', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     expect(screen.queryByRole('button', { name: /voice input/i })).not.toBeInTheDocument();
   });
 
-  it('submits the text and clears the composer on success', async () => {
+  it('clears the composer immediately on submit and reports success once the request resolves', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({ parsed_data: { raw_text: 'Had a great lunch' } }),
     } as Response);
 
-    const onResponse = vi.fn();
-    render(<NovaComposer onResponse={onResponse} />);
+    const onSubmitStart = vi.fn();
+    const onSubmitSuccess = vi.fn();
+    renderComposer({ onSubmitStart, onSubmitSuccess });
+
+    const textarea = screen.getByPlaceholderText(/What's on your mind\?/i);
+    fireEvent.change(textarea, { target: { value: 'Had a great lunch' } });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
+
+    expect(textarea).toHaveValue('');
+    expect(onSubmitStart).toHaveBeenCalledWith(expect.any(String), 'Had a great lunch');
+    const id = onSubmitStart.mock.calls[0][0];
+
+    await waitFor(() => {
+      expect(onSubmitSuccess).toHaveBeenCalledWith(id, { raw_text: 'Had a great lunch' });
+    });
+  });
+
+  it('reports an error and does not throw when the request fails', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false } as Response);
+
+    const onSubmitError = vi.fn();
+    renderComposer({ onSubmitError });
 
     const textarea = screen.getByPlaceholderText(/What's on your mind\?/i);
     fireEvent.change(textarea, { target: { value: 'Had a great lunch' } });
     fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
 
     await waitFor(() => {
-      expect(onResponse).toHaveBeenCalledWith({ raw_text: 'Had a great lunch' });
+      expect(onSubmitError).toHaveBeenCalledWith(expect.any(String), expect.any(String));
     });
-    expect(textarea).toHaveValue('');
   });
 });
 
@@ -85,7 +118,7 @@ describe('NovaComposer voice input', () => {
   });
 
   it('renders an enabled mic button when supported', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     const micButton = screen.getByRole('button', { name: /start voice input/i });
     expect(micButton).toBeInTheDocument();
@@ -93,7 +126,7 @@ describe('NovaComposer voice input', () => {
   });
 
   it('clicking the mic starts recognition and flips to the listening state', () => {
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     fireEvent.click(screen.getByRole('button', { name: /start voice input/i }));
 
@@ -102,21 +135,21 @@ describe('NovaComposer voice input', () => {
     expect(screen.getByRole('button', { name: /stop voice input/i })).toBeInTheDocument();
   });
 
-  it('disables the mic button while a submission is processing', async () => {
+  it('keeps the mic and textarea usable while a previous submission is still processing', async () => {
     let resolveFetch: (value: Response) => void = () => {};
     (global.fetch as ReturnType<typeof vi.fn>).mockImplementation(
       () => new Promise((resolve) => { resolveFetch = resolve; })
     );
 
-    render(<NovaComposer onResponse={() => {}} />);
+    renderComposer();
 
     const textarea = screen.getByPlaceholderText(/What's on your mind\?/i);
     fireEvent.change(textarea, { target: { value: 'Had a great lunch' } });
     fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /start voice input/i })).toBeDisabled();
-    });
+    expect(screen.getByRole('button', { name: /start voice input/i })).not.toBeDisabled();
+    expect(textarea).not.toBeDisabled();
+    expect(textarea).toHaveValue('');
 
     await act(async () => {
       resolveFetch({ ok: true, json: async () => ({ parsed_data: {} }) } as Response);

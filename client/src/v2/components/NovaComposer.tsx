@@ -1,19 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import type { BrainDumpResponse } from '@sage/shared';
 import { motion } from 'framer-motion';
-import { SendHorizonal, Loader2, Mic } from 'lucide-react';
-import { apiFetch } from '../../lib/api';
+import { SendHorizonal, Mic } from 'lucide-react';
+import { submitBrainDump } from '../../lib/braindump';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
+import { useToast } from '../../hooks/useToast';
 import { cn } from '../../lib/utils';
 
 interface NovaComposerProps {
-  onResponse: (data: BrainDumpResponse) => void;
+  onSubmitStart: (id: string, rawText: string) => void;
+  onSubmitSuccess: (id: string, data: BrainDumpResponse) => void;
+  onSubmitError: (id: string, message: string) => void;
 }
 
-export function NovaComposer({ onResponse }: NovaComposerProps) {
+export function NovaComposer({ onSubmitStart, onSubmitSuccess, onSubmitError }: NovaComposerProps) {
   const [text, setText] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [inFlightCount, setInFlightCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { showToast } = useToast();
   const { isSupported: isVoiceSupported, isListening, toggle: toggleListening } = useSpeechRecognition({
     onTranscriptChange: setText,
   });
@@ -26,28 +30,23 @@ export function NovaComposer({ onResponse }: NovaComposerProps) {
   }, [text]);
 
   const handleSubmit = async () => {
-    if (!text.trim() || isProcessing) return;
+    const rawText = text.trim();
+    if (!rawText) return;
 
-    setIsProcessing(true);
-    const payload = { text, timestamp: new Date().toISOString() };
+    const id = crypto.randomUUID();
+    setText(''); // Clear instantly — logging the next entry shouldn't wait on this one's LLM round trip.
+    onSubmitStart(id, rawText);
+    setInFlightCount((n) => n + 1);
 
     try {
-      const res = await apiFetch('/braindump', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to process braindump');
-      }
-
-      const { parsed_data } = await res.json();
-      onResponse(parsed_data);
-      setText('');
+      const data = await submitBrainDump(rawText);
+      onSubmitSuccess(id, data);
     } catch (error) {
       console.error(error);
+      onSubmitError(id, "Couldn't process that entry.");
+      showToast("Couldn't process your last brain dump — tap it in the feed to retry.", 'error');
     } finally {
-      setIsProcessing(false);
+      setInFlightCount((n) => n - 1);
     }
   };
 
@@ -57,6 +56,8 @@ export function NovaComposer({ onResponse }: NovaComposerProps) {
       handleSubmit();
     }
   };
+
+  const isProcessing = inFlightCount > 0;
 
   return (
     <div className="relative w-full">
@@ -86,7 +87,6 @@ export function NovaComposer({ onResponse }: NovaComposerProps) {
             'text-[var(--nova-text-primary)] placeholder:text-[var(--nova-text-muted)]',
             'min-h-[60px] overflow-hidden'
           )}
-          disabled={isProcessing}
           rows={1}
         />
 
@@ -94,12 +94,9 @@ export function NovaComposer({ onResponse }: NovaComposerProps) {
           {isVoiceSupported && (
             <button
               onClick={() => toggleListening(text)}
-              disabled={isProcessing}
               className={cn(
                 'min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-all duration-300',
-                isProcessing
-                  ? 'bg-[var(--nova-surface)] text-[var(--nova-text-muted)] cursor-not-allowed opacity-50'
-                  : isListening
+                isListening
                   ? 'bg-red-500/10 text-red-400 ring-2 ring-red-400/40 animate-pulse'
                   : 'bg-[var(--nova-surface)] text-[var(--nova-text-muted)] hover:text-[var(--nova-text-primary)] border border-[var(--nova-border)]'
               )}
@@ -110,20 +107,16 @@ export function NovaComposer({ onResponse }: NovaComposerProps) {
           )}
           <button
             onClick={handleSubmit}
-            disabled={!text.trim() || isProcessing}
+            disabled={!text.trim()}
             className={cn(
               'min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center transition-all duration-300',
-              text.trim() && !isProcessing
+              text.trim()
                 ? 'bg-gradient-to-r from-[var(--nova-violet)] to-[var(--nova-cyan)] text-white shadow-nova-glow'
                 : 'bg-[var(--nova-surface)] text-[var(--nova-text-muted)] cursor-not-allowed border border-[var(--nova-border)]'
             )}
             aria-label="Submit"
           >
-            {isProcessing ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <SendHorizonal className="w-5 h-5" />
-            )}
+            <SendHorizonal className="w-5 h-5" />
           </button>
         </div>
       </motion.div>

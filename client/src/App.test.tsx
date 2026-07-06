@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import '@testing-library/jest-dom';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
 import type { SageUser } from './lib/api';
 
 const { mockUser } = vi.hoisted(() => ({
@@ -19,14 +20,20 @@ vi.mock('./lib/api', async () => {
   };
 });
 
+// Dashboard/DashboardV2 fetch /dashboard/insights on mount; stub it so no real
+// network request escapes into the test environment.
+global.fetch = vi.fn().mockResolvedValue({ ok: false } as Response);
+
 const VERSION_KEY = 'sage:ui-version';
 
 function renderApp(initialPath = '/') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>
   );
 }

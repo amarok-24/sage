@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { BrainDumpResponse } from '@sage/shared';
+import type { FeedItem } from '../../lib/feed';
 import { NovaActivityFeed } from './NovaActivityFeed';
 import '@testing-library/jest-dom';
 
@@ -19,9 +20,13 @@ function makeEntry(overrides: Partial<BrainDumpResponse> = {}): BrainDumpRespons
   };
 }
 
+function makeDoneItem(id: string, overrides: Partial<BrainDumpResponse> = {}): FeedItem {
+  return { status: 'done', id, data: makeEntry(overrides) };
+}
+
 describe('NovaActivityFeed', () => {
   it('renders the welcome empty state with example cards when there are no entries', () => {
-    render(<NovaActivityFeed entries={[]} />);
+    render(<NovaActivityFeed items={[]} onRetry={vi.fn()} />);
 
     expect(screen.getByText(/What's on your mind\?/i)).toBeInTheDocument();
     expect(screen.getByText(/Habits & Time/i)).toBeInTheDocument();
@@ -31,12 +36,12 @@ describe('NovaActivityFeed', () => {
   });
 
   it('renders a card per category for a populated entry', () => {
-    const entry = makeEntry({
+    const item = makeDoneItem('1', {
       habits_completed: [{ habit_name: 'Running', matched_phrase: 'Ran for 30 minutes', completed: true }],
       expenses: [{ amount: 45, currency: 'USD', category: 'groceries', merchant_inferred: "Trader Joe's", description: 'groceries' }],
     });
 
-    render(<NovaActivityFeed entries={[entry]} />);
+    render(<NovaActivityFeed items={[item]} onRetry={vi.fn()} />);
 
     expect(screen.getByText(/"Ran for 30 minutes and spent \$45 on groceries\."/)).toBeInTheDocument();
     expect(screen.getByText('Habit Logged')).toBeInTheDocument();
@@ -45,13 +50,34 @@ describe('NovaActivityFeed', () => {
     expect(screen.getByText('USD 45')).toBeInTheDocument();
   });
 
-  it('renders one entry group per item in entries', () => {
-    const entryA = makeEntry({ raw_text: 'First entry', parsed_at: '2024-01-01T00:00:00.000Z' });
-    const entryB = makeEntry({ raw_text: 'Second entry', parsed_at: '2024-01-02T00:00:00.000Z' });
+  it('renders one entry group per item', () => {
+    const itemA = makeDoneItem('a', { raw_text: 'First entry' });
+    const itemB = makeDoneItem('b', { raw_text: 'Second entry' });
 
-    render(<NovaActivityFeed entries={[entryA, entryB]} />);
+    render(<NovaActivityFeed items={[itemA, itemB]} onRetry={vi.fn()} />);
 
     expect(screen.getByText('"First entry"')).toBeInTheDocument();
     expect(screen.getByText('"Second entry"')).toBeInTheDocument();
+  });
+
+  it('renders a pending placeholder for an in-flight submission', () => {
+    const item: FeedItem = { status: 'pending', id: 'p1', raw_text: 'Still processing this' };
+
+    render(<NovaActivityFeed items={[item]} onRetry={vi.fn()} />);
+
+    expect(screen.getByText('"Still processing this"')).toBeInTheDocument();
+    expect(screen.getByText(/Sage is reading this one/i)).toBeInTheDocument();
+  });
+
+  it('renders a retry affordance for a failed submission and invokes onRetry on click', () => {
+    const item: FeedItem = { status: 'error', id: 'e1', raw_text: 'This one failed', errorMessage: "Couldn't process that entry." };
+    const onRetry = vi.fn();
+
+    render(<NovaActivityFeed items={[item]} onRetry={onRetry} />);
+
+    const retryButton = screen.getByText(/Couldn't process that entry\./i).closest('button')!;
+    retryButton.click();
+
+    expect(onRetry).toHaveBeenCalledWith('e1');
   });
 });
