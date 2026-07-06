@@ -36,7 +36,7 @@ Sage's architecture is governed by three immutable constraints derived from the 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│                              BODHI — SYSTEM ARCHITECTURE                         │
+│                              SAGE — SYSTEM ARCHITECTURE                         │
 └──────────────────────────────────────────────────────────────────────────────────┘
 
   ┌─────────────────────┐         HTTPS/REST          ┌──────────────────────────┐
@@ -189,7 +189,7 @@ This is the primary interaction pathway. A single unstructured text input is tra
 1. **User submits text** via the Universal Input Portal.
 2. **React client** performs an **optimistic UI update** — the raw text appears in the activity feed with a pulsing "processing" animation (per Brand Identity's "breathing transitions").
 3. **POST `/api/braindump`** sends `{ text: string, timestamp: ISO8601 }`.
-4. **Node.js backend** validates the JWT, applies rate limiting, then calls the ADK 2.0 `bodhi_router` Workflow via the Python agent microservice.
+4. **Node.js backend** validates the JWT, applies rate limiting, then calls the ADK 2.0 `sage_router` Workflow via the Python agent microservice.
 5. **ADK Workflow** executes: `START → cultivator (LlmAgent) → persist_all`.
 6. **Response** returns structured entries; client reconciles optimistic state with confirmed data.
 
@@ -364,7 +364,7 @@ Common Indian Dish Macros (per katori / standard serving):
 
 These schemas define the structural contract between the ADK agent's output and the Node.js backend. They are used for:
 1. Runtime validation on the Node.js backend.
-2. Frontend type safety via the `@bodhi/shared` package.
+2. Frontend type safety via the `@sage/shared` package.
 3. The Pydantic mirror on the Python ADK side.
 
 ```typescript
@@ -541,7 +541,7 @@ def persist_all(ctx, node_input: dict) -> dict:
 # ── ADK 2.0 Workflow Definition ─────────────────────────────────────
 
 root_agent = Workflow(
-    name="bodhi_router",
+    name="sage_router",
     description=(
         "Sage's Universal Input Router — parses unstructured text "
         "into structured life data across nutrition, expenses, time, "
@@ -568,7 +568,7 @@ Sage uses a **hybrid multi-agent pattern** — a fast synchronous core agent for
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│                          bodhi_router Workflow                                │
+│                          sage_router Workflow                                │
 │                                                                               │
 │  ┌─────────┐     ┌───────────────────────┐     ┌───────────────────────────┐  │
 │  │  START  │────►│   cultivator          │────►│     persist_all           │  │
@@ -1130,7 +1130,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { nanoid } from 'nanoid';
 import { api } from '../lib/api';
-import { BrainDumpResponse } from '@bodhi/shared';
+import { BrainDumpResponse } from '@sage/shared';
 
 type SubmissionState = 'idle' | 'pending' | 'confirmed' | 'failed';
 
@@ -1234,7 +1234,7 @@ JWT_REFRESH_EXPIRY=7d
 BCRYPT_COST_FACTOR=12
 
 # ── MongoDB ───────────────────────────────
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/bodhi?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/sage?retryWrites=true&w=majority
 
 # ── Google AI / ADK ───────────────────────
 GOOGLE_GENAI_API_KEY=<gemini-api-key>
@@ -1245,15 +1245,15 @@ ADK_MODEL=gemini-3.1-flash-lite
 R2_ACCOUNT_ID=<cloudflare-account-id>
 R2_ACCESS_KEY_ID=<r2-access-key>
 R2_SECRET_ACCESS_KEY=<r2-secret-key>
-R2_BUCKET_NAME=bodhi-media
-R2_PUBLIC_URL=https://media.bodhi.app
+R2_BUCKET_NAME=sage-media
+R2_PUBLIC_URL=https://media.sage.app
 R2_PRESIGN_EXPIRY_SECONDS=300
 ```
 
 ### Appendix B: Project Directory Structure
 
 ```
-bodhi/
+sage/
 ├── client/                          # React + Vite + TypeScript frontend
 │   ├── src/
 │   │   ├── components/
@@ -1310,7 +1310,7 @@ bodhi/
 │   ├── server.py                    # FastAPI wrapper
 │   └── .env
 │
-├── shared/                          # @bodhi/shared — Zod schemas + TS types
+├── shared/                          # @sage/shared — Zod schemas + TS types
 │   ├── schemas/braindump.ts
 │   ├── schemas/auth.ts
 │   └── package.json
@@ -1333,7 +1333,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        bodhi: {
+        sage: {
           cream:    '#FAF8F5',   // Primary background
           sand:     '#F0EBE3',   // Secondary background / cards
           bark:     '#8B7355',   // Accent brown
@@ -1428,7 +1428,7 @@ async def process_braindump(payload: BrainDumpRequest):
 ```typescript
 // server/src/services/agent.service.ts
 
-import { BrainDumpResponseSchema } from '@bodhi/shared';
+import { BrainDumpResponseSchema } from '@sage/shared';
 
 const ADK_AGENT_URL = process.env.ADK_AGENT_URL ?? 'http://localhost:8001';
 
