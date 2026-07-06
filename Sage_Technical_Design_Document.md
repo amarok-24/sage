@@ -807,6 +807,7 @@ User submits brain dump
                                      │  date            │
                                      │  completed       │
                                      │  currentStreak   │
+                                     │  braindump_id    │
                                      └──────────────────┘
 ```
 
@@ -874,7 +875,7 @@ export const User = mongoose.model<IUser>('User', UserSchema);
 
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'sleep' | 'somatic_log' | 'journal';
+export type EntryType = 'nutrition' | 'expense' | 'time_log' | 'sleep' | 'somatic_log' | 'journal' | 'weekly_insight';
 
 export interface IEntry extends Document {
   userId:       Types.ObjectId;
@@ -883,6 +884,7 @@ export interface IEntry extends Document {
   raw_text:     string;        // Original brain dump text
   braindump_id: string;        // Groups all entries from one brain dump
   data:         Record<string, any>;   // Polymorphic payload
+  enrichment:   Record<string, any> | null;  // Async specialist output (§4.6); null until background enrichment completes
   createdAt:    Date;
   updatedAt:    Date;
 }
@@ -894,13 +896,14 @@ const EntrySchema = new Schema<IEntry>({
   },
   type: {
     type: String,
-    enum: ['nutrition', 'expense', 'time_log', 'sleep', 'somatic_log', 'journal'],
+    enum: ['nutrition', 'expense', 'time_log', 'sleep', 'somatic_log', 'journal', 'weekly_insight'],
     required: true, index: true,
   },
   date:         { type: Date, required: true, index: true },
   raw_text:     { type: String, required: true },
   braindump_id: { type: String, required: true, index: true },
   data:         { type: Schema.Types.Mixed, required: true },
+  enrichment:   { type: Schema.Types.Mixed, default: null },
 }, { timestamps: true });
 
 // Compound indexes
@@ -918,9 +921,12 @@ export const Entry = mongoose.model<IEntry>('Entry', EntrySchema);
 | `nutrition` | `{ food_items[], total_calories, total_protein_g, total_carbs_g, total_fat_g, meal_type }` |
 | `expense` | `{ amount, currency, category, merchant_inferred, description }` |
 | `time_log` | `{ duration_minutes, activity_category, description }` |
-| `sleep` | `{ bedtime, wake_time, duration_hours, quality, notes?, consistency_score?, circadian_alignment? }` |
-| `somatic_log` | `{ symptom, severity, body_area?, remedy_taken?, duration_minutes?, resolved, potential_triggers?[], suggestion? }` |
+| `sleep` | `{ bedtime, wake_time, duration_hours, quality, notes? }` |
+| `somatic_log` | `{ symptom, severity, body_area?, remedy_taken?, duration_minutes?, resolved }` |
 | `journal` | `{ text, media_urls[], mood_score, tags[], summary_snippet, ai_enriched }` |
+| `weekly_insight` | `{ top_insight, supporting_data[], growth_area, celebration }` |
+
+**`enrichment` field:** `null` until the corresponding async specialist (§4.6) finishes background processing. Shape depends on entry `type`: `sleep` → `SleepAnalysis` (`{ consistency_score, circadian_alignment, recommendation }`, output_key `sleep_analysis`); `somatic_log` → `SomaticCorrelation` (`{ potential_triggers[], confidence, suggestion }`, output_key `somatic_correlation`); `expense` → `ExpenseAnalysis` (`{ anomaly_flag, subscription_creep, insight }`, output_key `expense_analysis`); `time_log` → `TimeAnalysis` (`{ deep_work_ratio, time_drain, optimization_tip }`, output_key `time_analysis`). `nutrition` and `journal` entries receive no `enrichment` payload; `weekly_insight` entries have no `enrichment` (they *are* the output of `insight_synthesizer`).
 
 ### 5.4 HabitLogs Collection
 
@@ -936,6 +942,7 @@ export interface IHabitLog extends Document {
   completed:     boolean;
   currentStreak: number;            // Running streak at time of log
   source:        'braindump' | 'manual';
+  braindump_id?: string;            // Groups this log with the Entry docs from the same brain dump submission (absent for manual completions)
   createdAt:     Date;
 }
 
@@ -946,6 +953,7 @@ const HabitLogSchema = new Schema<IHabitLog>({
   completed: { type: Boolean, required: true, default: true },
   currentStreak: { type: Number, default: 1 },
   source:    { type: String, enum: ['braindump', 'manual'], default: 'braindump' },
+  braindump_id: { type: String, index: true },
 }, { timestamps: true });
 
 // Unique: one log per habit per day per user
@@ -963,6 +971,7 @@ export const HabitLog = mongoose.model<IHabitLog>('HabitLog', HabitLogSchema);
 | `entries` | `{ userId: 1, date: -1 }` | Compound | Dashboard — today's entries |
 | `entries` | `{ userId: 1, type: 1, date: -1 }` | Compound | Filtered views (expenses this month) |
 | `entries` | `{ userId: 1, braindump_id: 1 }` | Compound | Brain dump grouping |
+| `habitlogs` | `{ braindump_id: 1 }` | Single | Brain dump grouping (join with Entries by braindump_id) |
 | `habitlogs` | `{ userId: 1, habitName: 1, date: 1 }` | Compound Unique | Prevent duplicate logs per day |
 | `habitlogs` | `{ userId: 1, date: -1 }` | Compound | Habit dashboard queries |
 
@@ -984,12 +993,18 @@ export const HabitLog = mongoose.model<IHabitLog>('HabitLog', HabitLogSchema);
 | Method | Endpoint | Auth | Request / Query | Response |
 |--------|----------|------|-----------------|----------|
 | `POST` | `/api/braindump` | JWT | `{ text, timestamp? }` | `{ braindump_id, entries_created[], habits_updated[] }` |
-| `GET` | `/api/dashboard/today` | JWT | — | `{ nutrition[], expenses[], time_logs[], journal, habits[] }` |
+| `GET` | `/api/dashboard/today` | JWT | — | `{ entries: Entry[], habits: HabitLog[] }` |
 | `GET` | `/api/dashboard/summary` | JWT | `?range=week\|month&date=` | `{ totals: { calories, expenses, hours }, streaks[] }` |
+| `GET` | `/api/dashboard/insights` | JWT | — | `{ weeklyInsight: { date, data } \| null, recentEnrichments: [{ entryId, type, date, enrichment }] }` |
 | `GET` | `/api/entries` | JWT | `?type=&from=&to=&page=1&limit=20` | `{ entries[], pagination }` |
 | `GET` | `/api/entries/:id` | JWT | — | `{ entry }` |
 | `PATCH` | `/api/entries/:id` | JWT | `{ data: Partial<EntryData> }` | `{ entry }` |
 | `DELETE` | `/api/entries/:id` | JWT | — | `{ success: true }` |
+
+**Notes:**
+- `/api/dashboard/today`, `/api/dashboard/summary`, and the brain dump write path compute "today"/day boundaries using the requesting user's stored IANA timezone (`User.preferences.timezone`, §5.2), not the server process's local timezone. This is handled by DST-safe helpers in `server/src/utils/timezone.ts`: `getUserLocalMidnight`, `getUserLocalDayBounds`, `getLocalCalendarAnchor`. Previously, entries logged late at night could be attributed to the wrong logical day for any user not colocated with the server.
+- `/today`'s `entries` and `habits` share a `braindump_id` when they originated from the same submission (§5.3, §5.4); the client uses this to reconstruct the activity feed, including after a page reload (§7.3).
+- `/insights`'s `weeklyInsight.data` is the most recent `weekly_insight`-type Entry's `data` (§5.3), matching `insight_synthesizer`'s output (§4.6). `recentEnrichments` returns up to the last 20 Entries from the past 7 days with a non-null `enrichment` field (§5.3), each labeled by specialist `type` (`sleep_analysis`, `somatic_correlation`, `expense_analysis`, `time_analysis`; §4.6).
 
 ### 6.3 Habits
 
@@ -1121,68 +1136,37 @@ export const apiLimiter = rateLimit({
   └─────────────────┘       └──────────────────────┘
 ```
 
-#### React Hook Implementation
+#### Optimistic Feed Contract (No React Query)
+
+Sage does not use React Query — there is no `@tanstack/react-query` dependency in
+the client. Optimistic UI is implemented directly with `useState` in
+`client/src/components/Composer.tsx`, which drives a `FeedItem` union:
 
 ```typescript
-// client/src/hooks/useBrainDump.ts
-
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { nanoid } from 'nanoid';
-import { api } from '../lib/api';
-import { BrainDumpResponse } from '@sage/shared';
-
-type SubmissionState = 'idle' | 'pending' | 'confirmed' | 'failed';
-
-export function useBrainDump() {
-  const queryClient = useQueryClient();
-  const [state, setState] = useState<SubmissionState>('idle');
-
-  const mutation = useMutation({
-    mutationFn: (text: string) =>
-      api.post<BrainDumpResponse>('/braindump', { text }),
-
-    onMutate: async (text: string) => {
-      setState('pending');
-      await queryClient.cancelQueries({ queryKey: ['dashboard', 'today'] });
-
-      const previous = queryClient.getQueryData(['dashboard', 'today']);
-
-      // Optimistic: append pending entry to feed
-      queryClient.setQueryData(['dashboard', 'today'], (old: any) => ({
-        ...old,
-        pendingEntries: [
-          ...(old?.pendingEntries || []),
-          { id: nanoid(), raw_text: text, status: 'processing' },
-        ],
-      }));
-
-      return { previous };
-    },
-
-    onSuccess: () => {
-      setState('confirmed');
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'today'] });
-      queryClient.invalidateQueries({ queryKey: ['habits'] });
-      setTimeout(() => setState('idle'), 2000);
-    },
-
-    onError: (_err, _text, context) => {
-      setState('failed');
-      if (context?.previous) {
-        queryClient.setQueryData(['dashboard', 'today'], context.previous);
-      }
-    },
-  });
-
-  return {
-    submit: mutation.mutate,
-    state,
-    error: mutation.error,
-    reset: () => { mutation.reset(); setState('idle'); },
-  };
-}
+// client/src/lib/feed.ts
+export type FeedItem =
+  | { status: 'pending'; id: string; raw_text: string }
+  | { status: 'error';   id: string; raw_text: string; errorMessage: string }
+  | { status: 'done';    id: string; data: BrainDumpResponse };
 ```
+
+On submit, `Composer`: (1) clears the input immediately, without waiting on the
+LLM round trip; (2) generates a local `id` and calls `onSubmitStart(id, rawText)`
+so `Dashboard` (client/src/pages/Dashboard.tsx) renders a `{ status: 'pending' }`
+item right away; (3) on the `POST /api/braindump` response, calls
+`onSubmitSuccess(id, data)` or `onSubmitError(id, message)`. Errors also surface
+via a toast (`client/src/contexts/ToastContext.tsx` + `client/src/hooks/useToast.ts`
+— a plain React context, no external toast library) plus a retryable error card
+rendered by `client/src/components/ActivityFeed.tsx`.
+
+#### Feed Persistence Across Reload
+
+The activity feed previously existed only in React state, populated from live
+`POST /api/braindump` responses — refreshing the page silently lost the day's feed
+even though it was already persisted in MongoDB. `Dashboard.tsx` now hydrates on
+mount via `client/src/lib/hydrateFeed.ts`, which calls `GET /api/dashboard/today`
+(§6.2) and reconstructs `FeedItem[]` by grouping the returned Entry/HabitLog docs
+by their shared `braindump_id` (§5.3, §5.4).
 
 ### 7.4 Performance Budget
 
@@ -1190,7 +1174,7 @@ export function useBrainDump() {
 |--------|--------|----------|
 | First Contentful Paint | < 1.5 s | Vite code splitting, preloaded critical CSS |
 | Brain dump round-trip | < 5 s (p95) | Gemini Flash low-latency, ADK schema validation short-circuits |
-| Dashboard load | < 800 ms | MongoDB compound indexes, React Query caching, `.lean()` queries |
+| Dashboard load | < 800 ms | MongoDB compound indexes, single `/dashboard/today` fetch on mount (no client-side query cache), `.lean()` queries |
 | Media upload | Direct-to-R2 | Client uploads bypass backend — no proxy hop |
 | JS bundle size | < 250 KB gzipped | Tree-shaking, dynamic imports for chart components |
 
@@ -1257,21 +1241,27 @@ sage/
 ├── client/                          # React + Vite + TypeScript frontend
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ui/                  # Design system components
-│   │   │   ├── dashboard/           # Dashboard widgets
-│   │   │   ├── input/               # Universal Input Portal
-│   │   │   └── journal/             # Journal & media upload
+│   │   │   ├── AppShell.tsx         # Page chrome, background, theme toggle mount
+│   │   │   ├── Composer.tsx         # Universal Input Portal + optimistic submit
+│   │   │   ├── ActivityFeed.tsx     # Renders FeedItem[] (pending/error/done)
+│   │   │   ├── InsightsPanel.tsx    # Weekly insight + specialist pattern cards
+│   │   │   ├── Logo.tsx
+│   │   │   ├── ThemeToggle.tsx
+│   │   │   └── ProtectedRoute.tsx
+│   │   ├── contexts/
+│   │   │   ├── AuthContext.tsx
+│   │   │   └── ToastContext.tsx
 │   │   ├── hooks/
-│   │   │   ├── useBrainDump.ts
 │   │   │   ├── useAuth.ts
-│   │   │   └── useDashboard.ts
-│   │   ├── lib/                     # API client, utilities
-│   │   ├── pages/                   # Route-level components
-│   │   ├── stores/                  # Zustand state management
+│   │   │   ├── useToast.ts
+│   │   │   ├── useThemeMode.ts
+│   │   │   └── useSpeechRecognition.ts
+│   │   ├── lib/                     # API client, utilities (feed.ts, hydrateFeed.ts, braindump.ts)
+│   │   ├── pages/                   # Dashboard.tsx, Login.tsx, Register.tsx
 │   │   ├── App.tsx
 │   │   ├── main.tsx
-│   │   └── index.css                # Tailwind directives + design tokens
-│   ├── tailwind.config.ts
+│   │   └── index.css                # Tailwind directives + theme tokens
+│   ├── tailwind.config.js
 │   └── vite.config.ts
 │
 ├── server/                          # Node.js + Express backend
@@ -1297,6 +1287,8 @@ sage/
 │   │   │   ├── agent.service.ts     # ADK 2.0 HTTP invocation
 │   │   │   ├── habit.service.ts     # Streak calculation
 │   │   │   └── media.service.ts     # R2 signed URL generation
+│   │   ├── utils/
+│   │   │   └── timezone.ts          # getUserLocalMidnight, getUserLocalDayBounds, getLocalCalendarAnchor
 │   │   ├── config/db.ts
 │   │   └── app.ts
 │   └── tsconfig.json
@@ -1462,3 +1454,5 @@ export async function processBrainDump(userId: string, text: string) {
 | 1.0 | July 5, 2026 | System Architecture Team | Initial draft |
 | 1.1 | July 5, 2026 | System Architecture Team | Added Sleep & Somatic Logs domains; restructured to hybrid multi-agent architecture (sync core + 4 async specialists) |
 | 1.2 | July 5, 2026 | System Architecture Team | Added expense_analyzer and time_analyzer async specialist agents |
+| 1.3 | July 6, 2026 | System Architecture Team | Added braindump-linked habit logs, GET /api/dashboard/insights (weekly insight + specialist enrichment surfacing), timezone-safe day-boundary calculation, and persistent optimistic-UI activity feed (FeedItem, feed hydration on reload) |
+| 1.4 | July 6, 2026 | System Architecture Team | Removed the v1/v2 dual-UI system; promoted the Nova UI to be the app's sole client (Composer, ActivityFeed, InsightsPanel, AppShell) |
