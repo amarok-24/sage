@@ -62,7 +62,7 @@ class JournalData(BaseModel):
     tags: List[str]
     summary_snippet: str
 
-class BodhiAgentOutput(BaseModel):
+class SageAgentOutput(BaseModel):
     """The overarching schema containing all possible domain data for a given journal entry."""
     nutrition: Optional[NutritionData] = None
     expenses: Optional[List[ExpenseData]] = None

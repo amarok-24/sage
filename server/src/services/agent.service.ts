@@ -1,4 +1,4 @@
-import { BrainDumpResponseSchema } from '@bodhi/shared';
+import { BrainDumpResponseSchema } from '@sage/shared';
 import logger from '../utils/logger';
 
 const ADK_AGENT_URL = process.env.ADK_AGENT_URL ?? 'http://localhost:8001';

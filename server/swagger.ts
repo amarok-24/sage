@@ -2,8 +2,8 @@ import swaggerAutogen from 'swagger-autogen';
 
 const doc = {
   info: {
-    title: 'Bodhi API',
-    description: 'Auto-generated Swagger API documentation for Bodhi backend',
+    title: 'Sage API',
+    description: 'Auto-generated Swagger API documentation for Sage backend',
   },
   host: 'localhost:8000',
   schemes: ['http'],

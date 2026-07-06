@@ -108,7 +108,7 @@ describe('Auth Routes', () => {
     it('should clear refresh cookie', async () => {
       const response = await request(app).post('/api/auth/logout').send();
       expect(response.status).toBe(200);
-      expect(response.headers['set-cookie'][0]).toMatch(/bodhi_refresh=;/);
+      expect(response.headers['set-cookie'][0]).toMatch(/sage_refresh=;/);
     });
   });
 });

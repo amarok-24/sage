@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import logger from '../utils/logger';
 import type { MongoMemoryServer } from 'mongodb-memory-server';
+import { seedDemoUserIfNeeded } from './seedDemoUser';
 
 const LOCAL_DB_PORT = 27117;
 const LOCAL_DB_PATH = path.join(__dirname, '../../.mongo-data');
@@ -31,6 +32,10 @@ export const connectDB = async () => {
 
     const conn = await mongoose.connect(uri);
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
+
+    if (process.env.NODE_ENV !== 'production') {
+      await seedDemoUserIfNeeded();
+    }
   } catch (error: any) {
     logger.error(`Error: ${error.message}`);
     process.exit(1);

@@ -6,7 +6,7 @@ from google.adk.agents import LlmAgent
 from google.adk.apps import App
 from google.genai import types
 from google.adk.events.event import Event
-from app.schemas import BodhiAgentOutput
+from app.schemas import SageAgentOutput
 
 load_dotenv()
 
@@ -30,11 +30,11 @@ else:
 router_agent = LlmAgent(
     name="router",
     model="gemini-3.1-flash-lite",
-    instruction="""You are the Bodhi Universal Input Router.
-The user will provide an unstructured daily log. Your task is to extract and route the information into the appropriate structured schemas (Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal). 
+    instruction="""You are the Sage Universal Input Router.
+The user will provide an unstructured daily log. Your task is to extract and route the information into the appropriate structured schemas (Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal).
 Do not make up information. Only fill in the fields if they are explicitly mentioned or strongly implied.
 """,
-    output_schema=BodhiAgentOutput,
+    output_schema=SageAgentOutput,
 )
 
 from google.adk.workflow import Workflow, JoinNode, FunctionNode

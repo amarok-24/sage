@@ -4,6 +4,6 @@
 
 @layer base {
   body {
-    @apply bg-bodhi-bg text-bodhi-brown-900 font-sans antialiased;
+    @apply bg-sage-bg text-sage-brown-900 font-sans antialiased;
   }
 }

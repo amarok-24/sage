@@ -4,8 +4,6 @@
 
 Sage is a personal "second brain" assistant. Instead of juggling a habit tracker, a food log, a budgeting app, a sleep journal, and a diary, you type (or paste) one free-form entry describing your day — *"Slept 6.5hrs, kinda restless. Spent $12 on coffee and $40 on groceries. Ran 5k. Journaled about the presentation, felt anxious, 6/10 mood. Skipped meditation again."* — and an AI agent parses it and routes the pieces into the right place automatically.
 
-> Internal codebase name is `bodhi`; the product is branded **Sage** ("grow your awareness"). You'll see both in the repo — `bodhi`/`@bodhi/shared` in package names and code, `Sage` in product docs and UI copy.
-
 ## The problem
 
 Life-tracking apps force you to context-switch into a different app, a different form, a different mental mode for every domain — one tap for habits, another app for expenses, another for sleep, another for journaling. That friction is why most people abandon tracking within a week. The data people actually want to reflect on (mood, sleep, money, health) lives in six different silos that never talk to each other.
@@ -33,7 +31,7 @@ The user never has to say which pillar something belongs to — that's the agent
 sage/
 ├── client/    React 19 + Vite + TS single-page app (brain dump input, activity feed, dashboards)
 ├── server/    Node/Express + TS REST API (auth, braindump orchestration, entries, habits, journal, media)
-├── shared/    @bodhi/shared — Zod schemas shared by client & server (single source of truth for API shapes)
+├── shared/    @sage/shared — Zod schemas shared by client & server (single source of truth for API shapes)
 └── agent/     Python + Google ADK 2.0 microservice (FastAPI) — the brain-dump parsing agent
 ```
 
@@ -131,7 +129,7 @@ cd client
 pnpm dev
 ```
 
-Open `http://localhost:5173`, sign up, and submit a brain dump.
+Open `http://localhost:5173`. In development the client auto-logs in as a seeded demo user, so you land straight on the dashboard — submit a brain dump right away. (A production build shows a real Login/Register screen instead — see `Sage_Technical_Design_Document.md` for the auth flow.)
 
 ## Testing
 

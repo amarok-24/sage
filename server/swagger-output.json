@@ -1,8 +1,8 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "Bodhi API",
-    "description": "Auto-generated Swagger API documentation for Bodhi backend",
+    "title": "Sage API",
+    "description": "Auto-generated Swagger API documentation for Sage backend",
     "version": "1.0.0"
   },
   "host": "localhost:8000",

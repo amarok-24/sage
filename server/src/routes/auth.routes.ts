@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 import { validate } from '../middleware/validate';
 import { authLimiter } from '../middleware/rateLimiter';
-import { RegisterSchema, LoginSchema } from '@bodhi/shared';
+import { RegisterSchema, LoginSchema } from '@sage/shared';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -43,7 +43,7 @@ router.post('/register', authLimiter, validate(RegisterSchema), async (req: Requ
       { expiresIn: (process.env.JWT_REFRESH_EXPIRY || '7d') as any }
     );
     
-    res.cookie('bodhi_refresh', refreshToken, {
+    res.cookie('sage_refresh', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
@@ -83,7 +83,7 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req: Request, r
       { expiresIn: (process.env.JWT_REFRESH_EXPIRY || '7d') as any }
     );
     
-    res.cookie('bodhi_refresh', refreshToken, {
+    res.cookie('sage_refresh', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
@@ -99,7 +99,7 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req: Request, r
 
 router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    const token = req.cookies?.bodhi_refresh;
+    const token = req.cookies?.sage_refresh;
     if (!token) {
       return res.status(401).json({ error: 'No refresh token' });
     }
@@ -124,7 +124,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
       { expiresIn: (process.env.JWT_REFRESH_EXPIRY || '7d') as any }
     );
     
-    res.cookie('bodhi_refresh', newRefreshToken, {
+    res.cookie('sage_refresh', newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
@@ -138,7 +138,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 });
 
 router.post('/logout', (req: Request, res: Response) => {
-  res.clearCookie('bodhi_refresh');
+  res.clearCookie('sage_refresh');
   res.json({ success: true });
 });
 
