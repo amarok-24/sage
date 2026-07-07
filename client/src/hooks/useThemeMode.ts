@@ -8,9 +8,9 @@ const listeners = new Set<() => void>();
 
 function readStoredMode(): ThemeMode {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark';
+    return localStorage.getItem(STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 }
 
@@ -28,7 +28,7 @@ function emitChange() {
 }
 
 export function useThemeMode() {
-  const mode = useSyncExternalStore(subscribe, readStoredMode, () => 'dark' as ThemeMode);
+  const mode = useSyncExternalStore(subscribe, readStoredMode, () => 'light' as ThemeMode);
 
   const setMode = useCallback((next: ThemeMode) => {
     try {
