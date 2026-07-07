@@ -41,24 +41,23 @@ The user never has to say which pillar something belongs to — that's the agent
 ## Architecture
 
 ```
-┌─────────────────────────┐        raw input         ┌─────────────────────────┐
-│  client/ (React + Vite) │ ───────────────────────> │  server/ (Node/Express) │
-│  optimistic UI, persisted│ <─────────────────────── │   main orchestrator     │
-│  feed, async insights    │    structured response   └─────────────────────────┘
-└─────────────────────────┘                            ▲    │           │
-                                       read entries /    │    │ forward      │ invoke
-                                       insights           │    │ payload      │ agent tools
-                                                          │    ▼           ▼
-                                                    ┌───────────┐ ┌─────────────────────────┐
-                                                    │  MongoDB  │ │  agent/ (Python + ADK)  │
-                                                    │(Mongoose) │ │           │             │
-                                                    └───────────┘ │           ▼             │
-                                                          ▲       │        Gemini           │
-                                                          │       └─────────────────────────┘
-                                                    ┌───────────────────┐
-                                                    │  BullMQ / Redis   │
-                                                    │  specialist queue │
-                                                    └───────────────────┘
+┌───────────────────────────────┐
+│    client/ (React + Vite)     │
+│ optimistic UI, persisted feed │
+└───────────────────────────────┘
+                │
+                ▼  raw brain dump
+┌───────────────────────────────┐                           ┌──────────────────────────┐
+│   server/ (Node + Express)    │  ── invoke, raw text ──>  │  agent/ (Python + ADK)   │
+│       main orchestrator       │  <── validated JSON ───   │ router + 7 FunctionNodes │
+└───────────────────────────────┘                           │ -> Gemini 3.1 Flash Lite │
+                                                            └──────────────────────────┘
+                │
+                ▼  persist entries / read entries + insights
+┌───────────────────────────────┐                        ┌───────────────────┐
+│            MongoDB            │  <── enrichments ────  │  BullMQ / Redis   │
+│          (Mongoose)           │                        │ specialist queues │
+└───────────────────────────────┘                        └───────────────────┘
 ```
 
 The agent (`agent/app/agent.py`) is a Google ADK **`Workflow`** graph, not a single LLM call:
