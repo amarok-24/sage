@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
+<style>
+  :root {
+    --nova-bg: #f7f7fb;
+    --nova-surface: #ffffff;
+    --nova-border: #e5e5ef;
+    --nova-text-primary: #1a1a2e;
+    --nova-text-muted: #6b6b80;
+    --nova-violet: #7c3aed;
+    --nova-cyan: #0891b2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1120px;
+    height: 560px;
+    background: var(--nova-bg);
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .glow-a, .glow-b {
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.25;
+  }
+  .glow-a { top: -140px; left: -120px; background: radial-gradient(circle, var(--nova-violet), transparent 70%); }
+  .glow-b { bottom: -140px; right: -120px; background: radial-gradient(circle, var(--nova-cyan), transparent 70%); }
+  .card {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wordmark {
+    font-size: 64px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(90deg, var(--nova-violet), var(--nova-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .tagline {
+    font-size: 22px;
+    color: var(--nova-text-muted);
+    font-weight: 500;
+  }
+  .pitch {
+    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--nova-text-primary);
+    opacity: 0.75;
+  }
+</style>
+</head>
+<body>
+  <div class="glow-a"></div>
+  <div class="glow-b"></div>
+  <div class="card">
+    <div class="logo">
+      <svg viewBox="0 0 48 48" width="88" height="88" role="img" aria-label="Sage">
+        <defs>
+          <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7c3aed" />
+            <stop offset="100%" stop-color="#0891b2" />
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#logo-gradient)" />
+        <circle cx="24" cy="24" r="10" fill="#f7f7fb" fill-opacity="0.85" />
+        <circle cx="28" cy="20" r="6" fill="#ffffff" fill-opacity="0.6" />
+      </svg>
+    </div>
+    <div class="wordmark">Sage</div>
+    <div class="tagline">Grow your awareness.</div>
+    <div class="pitch">One brain dump. Six areas of your life.</div>
+  </div>
+</body>
+</html>

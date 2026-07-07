@@ -23,7 +23,14 @@ function getTimezoneOffsetMinutes(timezone: string, date: Date): number {
     Number(parts.year), Number(parts.month) - 1, Number(parts.day),
     Number(parts.hour), Number(parts.minute), Number(parts.second),
   );
-  return (asUTC - date.getTime()) / 60_000;
+  // asUTC is whole-second (Date.UTC with no ms arg); date.getTime() isn't. Without
+  // flooring, date's own sub-second component leaks into the "whole minutes" offset
+  // as a fractional residual, which then leaks into getUserLocalMidnight's result —
+  // so two calls a few hundred ms apart (e.g. a write vs. a later read) disagree on
+  // where "midnight" is by that same residual, occasionally dropping same-day entries
+  // from a $gte/$lt boundary query.
+  const flooredDateMs = Math.floor(date.getTime() / 1000) * 1000;
+  return (asUTC - flooredDateMs) / 60_000;
 }
 
 /** The UTC instant of local midnight, on the calendar day `reference` falls on in `timezone`. */

@@ -1,5 +1,14 @@
 {
 	"dependencies": {
 		"@rolldown/binding-darwin-arm64": "^1.1.4"
+	},
+	"devDependencies": {
+		"playwright": "^1.61.1",
+		"bullmq": "^5.79.2",
+		"ioredis": "^5.4.1",
+		"mongodb": "^6.10.0"
+	},
+	"scripts": {
+		"capture:assets": "node scripts/capture-assets/narration.mjs && node scripts/capture-assets/capture.mjs"
 	}
 }

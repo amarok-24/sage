@@ -27,7 +27,10 @@ export async function insightSynthesize(data: { userId: string; weekStart: strin
     userId: data.userId,
     type: 'weekly_insight',
     date: weekStart,
-    raw_text: '',
+    // Not derived from a single brain dump, but Entry.raw_text is a required
+    // String path and Mongoose's built-in `required` validator rejects ''
+    // (empty string doesn't satisfy String.required, unlike other falsy values).
+    raw_text: 'Weekly insight synthesis',
     braindump_id: nanoid(),
     data: result,
   });
