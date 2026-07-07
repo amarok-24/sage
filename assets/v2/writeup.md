@@ -89,6 +89,16 @@ The interface (internally "Nova") is a single glassmorphic composer over a soft 
 - **An insights panel that earns its place.** Rather than a stats page nobody opens, cross-pillar analysis surfaces directly in the main feed: a weekly "top insight" card with a celebration and a growth area, plus focused cards for sleep, symptom, spending, and time patterns whenever the async specialists have something to say.
 - **Voice, when typing isn't convenient.** The composer supports live dictation via the Web Speech API for hands-free logging.
 
+## Why the Insights Compound
+
+A single brain dump only ever states a fact: slept 7 hours, spent $45, felt anxious. A *pattern* — sleep quality tracking with next-day mood, spending drifting upward on stressful days, a symptom that keeps recurring alongside a particular habit — isn't visible in any one entry. It only exists once enough entries accumulate for something to look backward across them, which is exactly what the specialist layer is for.
+
+Twice, the app looks back rather than just forward. The immediate specialists (`sleep-analyze`, `somatic-correlate`, `journal-enrich`) attach a focused read on a single entry shortly after it's saved — a sleep-quality note, a possible symptom correlation, a reflection on a journal entry's mood. The weekly synthesizer (`insight-synthesize`) goes further: once a week, it reads back a full week of entries across every pillar at once and produces one top insight, one thing to celebrate, and one honest growth area, grounded in that week's actual data rather than a generic platitude.
+
+This is deliberately a feature that gets *more* useful the longer someone uses it, not less. The first day, there's nothing to notice yet — a single entry is just a fact. By the end of a week, the weekly synthesis has something real to say because it has real history to draw from. A month in, the sleep and symptom correlations aren't guesses; they're patterns that have shown up more than once. Nothing about this asks the user to do extra work to unlock it — it accrues automatically from the same brain dumps they were already going to write.
+
+This is also, concretely, what "Grow your awareness" means as more than a tagline. Awareness isn't a single dashboard number — it's the specific, surfaced correlation the user couldn't reasonably have noticed themselves from a week of scattered notes across six different areas of their life. It grows the way any awareness does: gradually, from repeated small observations rather than one big analysis, and it's the Insights panel's entire reason for existing.
+
 ## Concepts Demonstrated
 
 1. **Agent / Multi-agent system (ADK):** the router + 7-node fan-out/fan-in `Workflow` (`agent/app/agent.py`) is a genuine multi-node agentic pipeline built on Google's Agent Development Kit, not a thin LLM wrapper. A second tier of specialist agents (sleep, somatic, expense, time, journal, and weekly-insight synthesizers), invoked asynchronously via BullMQ rather than inline, extends that same agent-per-domain pattern to cross-entry analysis.

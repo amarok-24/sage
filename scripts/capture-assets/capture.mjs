@@ -129,8 +129,20 @@ async function main() {
   console.log('[capture] reloading for insights panel...');
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(2000);
-  await page.screenshot({ path: screenshotPath('screenshot-insights-panel.png'), fullPage: true });
+
+  console.log('[capture] narrating weekly synthesis card...');
+  const weeklyCard = page.getByText("This Week's Insight", { exact: false }).first();
+  await weeklyCard.waitFor({ state: 'visible', timeout: 15000 });
+  await weeklyCard.scrollIntoViewIfNeeded();
   await page.waitForTimeout(holdMs(6));
+
+  console.log('[capture] narrating enrichment cards...');
+  const enrichmentCard = page.getByText('Sleep Pattern', { exact: false }).first();
+  await enrichmentCard.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(holdMs(7));
+
+  await page.screenshot({ path: screenshotPath('screenshot-insights-panel.png'), fullPage: true });
+  await page.waitForTimeout(holdMs(8));
 
   // Best-effort voice dictation still — Chromium exposes webkitSpeechRecognition
   // even headless, so the button renders and isListening flips true on click
