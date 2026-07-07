@@ -33,11 +33,11 @@ Sage assumes that ultimate clarity about one's work-life balance, health, and fi
 
 The interface must reflect the tranquility of a personal sanctuary rather than corporate spreadsheets.
 
-* **The Vibe:** Calming, grounded, and minimalist. The UI is clean, quiet, and designed to foster reflection rather than user anxiety.
+* **The Vibe:** Calm focus with a layer of quiet technological wonder. The UI ("Nova") is a glassmorphic surface — dark by default, with a light mode for daytime use — clean and quiet enough to foster reflection, while a soft violet-to-cyan glow keeps it feeling alive while the AI is thinking.
 * **Visual Language:**
-  * **Color Palette:** Curated sage greens (`#87A96B`), deep forest greens (`#2D5016`), soft sand (`#F0EBE3`), warm bark brown, and soothing off-white backgrounds (`#FAF8F5`).
-  * **Typography:** Elegant serif fonts for journal entries and long-form reflection, paired with highly readable sans-serif for numbers, trackers, and widgets.
-  * **Micro-Animations:** Fluid "breathing" and "absorbing" transitions. Logged entries feel like they are gently fading into a pool of memory rather than being "submitted."
+  * **Color Palette:** A violet-to-cyan gradient system — `--nova-violet` (`#8b5cf6` dark / `#7c3aed` light) and `--nova-cyan` (`#06b6d4` dark / `#0891b2` light) — glowing against a near-black surface in dark mode (`--nova-bg` `#0b0d14`) or a soft off-white surface in light mode (`--nova-bg` `#f7f7fb`). Blurred, slowly panning gradient backgrounds and a pulsing glow on the composer while an entry is processing.
+  * **Typography:** Sans-serif throughout — Space Grotesk for the wordmark and display text, Inter for body copy, numbers, and dashboard widgets — chosen for legibility across journal entries and trackers alike.
+  * **Micro-Animations:** A "breathing" pulse-glow while the AI processes an entry, and logged entries fade and slide into place as they settle into the activity feed.
 
 ---
 
@@ -51,6 +51,8 @@ How the system maps conversational input to structured tracking:
 * **Rest** (Sleep & Recovery): Logs sleep times, quality, and circadian alignment. *Example Input:* "Slept at 11:30 PM, woke up at 7 AM, felt deeply rested." Sage correlates sleep patterns with next-day focus baselines and productivity scores.
 * **Reactions** (Somatic Logs & Symptoms): Maps physical symptoms, severity, and treatments. *Example Input:* "Had a headache in the afternoon, took an ibuprofen, felt better in an hour." Sage tracks somatic feedback, helping uncover hidden correlations like stress-induced flare-ups.
 * **Replenish** (Nutrition & Intake): Estimates nutritional intake and macronutrients for regional cuisines without commercial databases. *Example Input:* "Had 2 rotis with dal makhani and a katori of raita for lunch." Sage parses food items to calculate caloric flow and macros seamlessly.
+
+*Note: in the underlying data model, Time and Habits are tracked as two separate domains (`time_logs` and `habits`), and today's UI surfaces all seven domains by their plain names (Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal) rather than these R-names — the pillar language above remains this document's internal shorthand for brand voice and messaging.*
 
 ---
 

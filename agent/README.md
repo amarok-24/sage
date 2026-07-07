@@ -1,19 +1,24 @@
 # agent
 
-Simple ReAct agent
+Sage's brain-dump parsing agent: a router `LlmAgent` extracts structured data across 7 life domains in one call, fanning out to per-domain processing nodes that are joined into a single summary. Async specialist agents handle deeper background enrichment (mood scoring, sleep/somatic/expense/time analysis, weekly insight synthesis).
 Agent generated with `agents-cli` version `0.6.1`
 
 ## Project Structure
 
 ```
 agent/
-├── app/         # Core agent code
-│   ├── agent.py               # Main agent logic
-│   ├── fast_api_app.py        # FastAPI Backend server
-│   └── app_utils/             # App utilities and helpers
-├── tests/                     # Unit, integration, and load tests
-├── GEMINI.md                  # AI-assisted development guide
-└── pyproject.toml             # Project dependencies
+├── app/                        # Core agent code
+│   ├── agent.py                # Router agent + 7-domain fan-out/join workflow
+│   ├── specialists.py          # Async specialist agents (journal/sleep/somatic/expense/time/insight)
+│   ├── schemas.py               # Pydantic I/O schemas (SageAgentOutput, specialist outputs)
+│   ├── fast_api_app.py         # FastAPI server (/process, /specialists/{name})
+│   └── app_utils/              # A2A routes, telemetry, session services, typing helpers
+├── tests/                      # Unit, integration, and eval tests
+├── deployment/terraform/       # Cloud Run infrastructure
+├── Dockerfile
+├── agents-cli-manifest.yaml
+├── GEMINI.md                   # AI-assisted development guide
+└── pyproject.toml              # Project dependencies
 ```
 
 > 💡 **Tip:** Use [Antigravity CLI](https://antigravity.google/) for AI-assisted development - project context is pre-configured in `GEMINI.md`.
@@ -57,7 +62,7 @@ You can also use features from the [ADK](https://adk.dev/) CLI with `uv run adk`
 | `agents-cli lint`    | Run code quality checks                                                               |
 | `agents-cli eval`    | Evaluate agent behavior (generate, grade, analyze, and more — see `agents-cli eval --help`) |
 | `uv run pytest tests/unit tests/integration` | Run unit and integration tests                                                        |
-| `agents-cli deploy`  | Deploy agent to Cloud Run                                                                   || [A2A Inspector](https://github.com/a2aproject/a2a-inspector) | Launch A2A Protocol Inspector                                                        |
+| `agents-cli deploy`  | Deploy agent to Cloud Run                                                                   |
 
 ## 🛠️ Project Management
 

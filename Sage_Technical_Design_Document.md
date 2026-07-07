@@ -30,7 +30,7 @@ Sage's architecture is governed by three immutable constraints derived from the 
 
 1. **Zero-friction entry** — The user interacts with a single text input. All structural intelligence lives server-side.
 2. **Cloud-first AI** — Zero LLM weights reside on the client or backend. All cognitive processing is offloaded to Google Gemini via the ADK 2.0 agent runtime.
-3. **Decoupled media storage** — Binary assets (images, videos) live in Cloudflare R2, keeping MongoDB small and performant for multi-year journaling.
+3. **Decoupled media storage** — Binary assets (images, videos) are kept outside the primary MongoDB documents. Today this is local disk storage via `multer` for development; the presign/media service layer is structured so a production S3-compatible store (e.g. Cloudflare R2) can be swapped in without changing the API contract.
 
 ### 1.2 High-Level Architecture Diagram
 
@@ -49,32 +49,37 @@ Sage's architecture is governed by three immutable constraints derived from the 
   │  │ Input Portal  │  │                              │  │ (JWT + Rate Limit) │  │
   │  └───────────────┘  │                              │  └────────┬───────────┘  │
   │  ┌───────────────┐  │                              │           │              │
-  │  │ Dashboard     │  │                              │  ┌────────▼───────────┐  │
-  │  │ Views         │  │                              │  │ API Router Layer   │  │
+  │  │ Dashboard &   │  │                              │  ┌────────▼───────────┐  │
+  │  │ Insights      │  │                              │  │ API Router Layer   │  │
   │  └───────────────┘  │                              │  │ /api/braindump     │  │
-  │  ┌───────────────┐  │                              │  │ /api/dashboard     │  │
-  │  │ Journal &     │  │                              │  │ /api/media         │  │
-  │  │ Media Upload  │  │                              │  │ /api/habits        │  │
-  │  └───────────────┘  │                              │  └────────┬───────────┘  │
+  │                     │                              │  │ /api/dashboard     │  │
+  │                     │                              │  │ /api/media         │  │
+  │                     │                              │  │ /api/habits        │  │
+  │                     │                              │  └────────┬───────────┘  │
   └─────────────────────┘                              │           │              │
                                                        │  ┌────────▼───────────┐  │
-                                                       │  │ ADK 2.0 Agent      │  │
-                                                       │  │ Service Layer      │  │
-                                                       │  │ (Sage Router      │  │
-                                                       │  │  Agent)            │  │
+                                                       │  │ Agent Service      │  │
+                                                       │  │ (HTTP → FastAPI    │  │
+                                                       │  │  microservice,     │  │
+                                                       │  │  ADK 2.0 Workflow) │  │
+                                                       │  └────────┬───────────┘  │
+                                                       │           │              │
+                                                       │  ┌────────▼───────────┐  │
+                                                       │  │ BullMQ / Redis     │  │
+                                                       │  │ (async specialist  │  │
+                                                       │  │  job queues)       │  │
                                                        │  └────────┬───────────┘  │
                                                        └───────────┼──────────────┘
                                                                    │
                                         ┌──────────────────────────┼──────────────────┐
                                         │                          │                  │
                                 ┌───────▼─────────┐      ┌────────▼────────┐         │
-                                │  MongoDB Atlas   │      │  Cloudflare R2  │         │
-                                │  (Data Store)    │      │  (Media Bucket) │         │
-                                │                  │      │                 │         │
-                                │  • Users         │      │  • images/      │         │
-                                │  • Entries       │      │  • videos/      │         │
-                                │  • Habits        │      │                 │         │
-                                │  • Sessions      │      └─────────────────┘         │
+                                │  MongoDB         │      │  Local Disk     │         │
+                                │  (Data Store)    │      │  (Media, dev;   │         │
+                                │                  │      │  cloud object   │         │
+                                │  • Users         │      │  store planned  │         │
+                                │  • Entries       │      │  for prod)      │         │
+                                │  • HabitLogs     │      └─────────────────┘         │
                                 └──────────────────┘                                  │
                                                                                       │
                               ┌───────────────────────────────────────────────────┐   │
@@ -97,14 +102,19 @@ React Client ──► POST /api/braindump ──► Node.js Server
                                   │  START                   │
                                   │    │                     │
                                   │    ▼                     │
-                                  │  cultivator (LlmAgent)   │
+                                  │  router_agent (LlmAgent) │
                                   │    │                     │
                                   │    ▼                     │
-                                  │  persist_all (Function)  │
+                                  │  fan-out to 7 domain      │
+                                  │  FunctionNodes → JoinNode │
+                                  │  ("merge") → combine_results │
                                   └────────────┬─────────────┘
                                                │
                                   ┌────────────▼─────────────┐
-                                  │  MongoDB Atlas (writes)   │
+                                  │  Node.js persists parsed  │
+                                  │  entries to MongoDB, then │
+                                  │  enqueues async specialist │
+                                  │  jobs (BullMQ/Redis)       │
                                   └───────────────────────────┘
 ```
 
@@ -117,16 +127,17 @@ React Client ──► POST /api/braindump ──► Node.js Server
 | Layer | Technology | Version | Justification |
 |-------|-----------|---------|---------------|
 | **Frontend Framework** | React (via Vite) | React 19+ / Vite 6+ | Lightning-fast HMR, zero-config TypeScript, tree-shaking. No SSR overhead for a personal SPA. |
-| **Frontend Language** | TypeScript | 5.x | Type safety across shared Zod schemas, IDE autocompletion, reduced runtime bugs. |
-| **CSS Framework** | Tailwind CSS | 4.x | Utility-first, enabling rapid implementation of Sage's organic design language (earth tones, fluid transitions). |
-| **Backend Runtime** | Node.js | 26 LTS | Unified TypeScript ecosystem. Native `fetch`, `crypto`, and ESM support. |
-| **Backend Framework** | Express.js | 5.x | Mature middleware ecosystem (JWT, rate limiting, CORS). Lightweight and well-understood. |
+| **Frontend Language** | TypeScript | 6.x (client) / 5.x (server) | Type safety across shared Zod schemas, IDE autocompletion, reduced runtime bugs. |
+| **CSS Framework** | Tailwind CSS | 3.x | Utility-first, driving the "Nova" glassmorphic violet/cyan design language (see Brand Identity). |
+| **Backend Runtime** | Node.js | 20+ | Unified TypeScript ecosystem. Native `fetch`, `crypto`, and ESM support. |
+| **Backend Framework** | Express.js | 4.x | Mature middleware ecosystem (JWT, rate limiting, CORS). Lightweight and well-understood. |
 | **Validation** | Zod | 3.x | Runtime schema validation on client and server. Drives the ADK agent's structured output contract. |
-| **AI Agent Runtime** | Google ADK 2.0 | ≥ 2.0.0 | Graph-based `Workflow` engine with fan-out/fan-in, conditional routing, and Pydantic `output_schema` for deterministic structured output. |
+| **AI Agent Runtime** | Google ADK 2.0 | ≥ 2.0.0, < 3.0.0 | Graph-based `Workflow` engine with fan-out/fan-in, conditional routing, and Pydantic `output_schema` for deterministic structured output. |
 | **LLM Model** | Gemini 3.1 Flash Lite | Latest | High-speed structured output, excellent multilingual + Indian food corpus coverage. |
-| **Database** | MongoDB Atlas | 8.x (M0 Free Tier) | Flexible document schema for heterogeneous entry types. Native JSON storage aligns with LLM outputs. |
-| **ODM** | Mongoose | 10.x | Schema enforcement, middleware hooks, population. Mature TypeScript support. |
-| **Media Storage** | Cloudflare R2 | S3-compatible | Zero egress fees, global edge caching, S3-compatible SDK. |
+| **Database** | MongoDB | 8.x (Atlas free tier in production; embedded `mongodb-memory-server` for local dev) | Flexible document schema for heterogeneous entry types. Native JSON storage aligns with LLM outputs. |
+| **ODM** | Mongoose | 8.x | Schema enforcement, middleware hooks, population. Mature TypeScript support. |
+| **Job Queue** | BullMQ + Redis | — | Background specialist agent processing (sleep/somatic/expense/time/insight enrichment); embedded `redis-memory-server` for local dev. |
+| **Media Storage** | Local disk (`multer`) | — | Development storage today; the presign/upload API is structured so an S3-compatible store (e.g. Cloudflare R2) can be swapped in for production. |
 | **Authentication** | JWT (jsonwebtoken) | 9.x | Stateless auth for SPA. Short-lived access tokens + HTTP-only refresh tokens. |
 | **Rate Limiting** | express-rate-limit | 7.x | IP-based + user-based rate limiting to protect the AI endpoint. |
 
@@ -137,7 +148,9 @@ React Client ──► POST /api/braindump ──► Node.js Server
 | pnpm | Package management (workspace-aware monorepo) |
 | Vitest | Unit and integration testing (Vite-native) |
 | ESLint + Prettier | Code quality and formatting |
-| Docker Compose | Local MongoDB + development services |
+| `mongodb-memory-server` / `redis-memory-server` | Auto-started embedded MongoDB and Redis for local dev — no Docker or local `mongod`/`redis-server` needed |
+| Winston | Structured server-side logging |
+| Swagger (`swagger-autogen` + `swagger-ui-express`) | Auto-generated API docs, served at `/api-docs` |
 | GitHub Actions | CI/CD pipeline |
 
 ---
@@ -153,7 +166,7 @@ This is the primary interaction pathway. A single unstructured text input is tra
 ```
 ┌─────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────┐   ┌────────────┐
 │  User   │   │  React   │   │  Node.js     │   │ ADK 2.0  │   │  MongoDB   │
-│         │   │  Client  │   │  Backend     │   │  Agent   │   │  Atlas     │
+│         │   │  Client  │   │  Backend     │   │  Agent   │   │            │
 └────┬────┘   └────┬─────┘   └──────┬───────┘   └────┬─────┘   └─────┬──────┘
      │             │                │                 │               │
      │ Types text  │                │                 │               │
@@ -165,16 +178,17 @@ This is the primary interaction pathway. A single unstructured text input is tra
      │             │ POST /api/     │                 │               │
      │             │ braindump      │                 │               │
      │             │───────────────►│                 │               │
-     │             │                │ Invoke Workflow  │               │
+     │             │                │ POST /process    │               │
      │             │                │─────────────────►               │
      │             │                │                 │ Gemini Flash  │
      │             │                │                 │ Structured    │
-     │             │                │                 │ Output        │
-     │             │                │                 │               │
-     │             │                │                 │ persist_all   │
-     │             │                │                 │───────────────►
-     │             │                │ Structured result│               │
+     │             │                │                 │ Output (router│
+     │             │                │                 │ + fan-out/join)│
+     │             │                │ Structured result │              │
      │             │                │◄─────────────────│               │
+     │             │                │ Persist entries + habit logs      │
+     │             │                │───────────────────────────────────►
+     │             │                │ Enqueue async specialist jobs (BullMQ) │
      │             │ 200 OK +       │                 │               │
      │             │ parsed entries │                 │               │
      │             │◄───────────────│                 │               │
@@ -189,9 +203,9 @@ This is the primary interaction pathway. A single unstructured text input is tra
 1. **User submits text** via the Universal Input Portal.
 2. **React client** performs an **optimistic UI update** — the raw text appears in the activity feed with a pulsing "processing" animation (per Brand Identity's "breathing transitions").
 3. **POST `/api/braindump`** sends `{ text: string, timestamp: ISO8601 }`.
-4. **Node.js backend** validates the JWT, applies rate limiting, then calls the ADK 2.0 `sage_router` Workflow via the Python agent microservice.
-5. **ADK Workflow** executes: `START → cultivator (LlmAgent) → persist_all`.
-6. **Response** returns structured entries; client reconciles optimistic state with confirmed data.
+4. **Node.js backend** validates the JWT, applies rate limiting, then calls `POST /process` on the Python agent microservice.
+5. **ADK Workflow** executes: `START → router_agent (LlmAgent) → 7 domain FunctionNodes → JoinNode`; the FastAPI wrapper returns the router's structured JSON.
+6. **Node.js** persists the structured entries and habit logs to MongoDB, enqueues async specialist jobs, and returns the result; client reconciles optimistic state with confirmed data.
 
 ### 3.2 Workflow 2: Indian Food Macro Estimation
 
@@ -201,9 +215,9 @@ Existing nutrition APIs index heavily on Western food databases (USDA, FatSecret
 
 #### The Solution
 
-Sage leverages Gemini 3.1 Flash Lite's internal training corpus, which covers Indian nutritional data extensively. The ADK agent's system prompt embeds a **calibrated reference table** for common Indian measurements, ensuring consistent estimation without any third-party API.
+Sage leverages Gemini 3.1 Flash Lite's internal training corpus, which covers Indian nutritional data extensively, without any third-party API. Today the router agent's instruction is intentionally generic and does not embed a reference table — estimation relies purely on the base model's implicit knowledge. The table below is a proposed calibration reference that has not yet been added to the agent's system prompt.
 
-#### Measurement Reference Table (Embedded in Agent Prompt)
+#### Measurement Reference Table (Proposed — Not Yet Embedded in Agent Prompt)
 
 | Measurement | Approx. Weight / Volume | Notes |
 |-------------|------------------------|-------|
@@ -234,9 +248,11 @@ ADK Agent (Nutrition Processing):
 
 ### 3.3 Workflow 3: Journal Entry with Media Upload
 
+**Status:** The backend endpoints below exist and work, but no client UI is wired up to this flow yet — the composer creates journal entries only from parsed brain-dump text, with no file picker. Media storage is currently local disk, not Cloudflare R2 (see §2.1).
+
 ```
 ┌─────────┐   ┌──────────┐   ┌──────────────┐   ┌───────────────┐
-│  User   │   │  React   │   │  Node.js     │   │ Cloudflare R2 │
+│  User   │   │  React   │   │  Node.js     │   │ Object Storage│
 └────┬────┘   └────┬─────┘   └──────┬───────┘   └───────┬───────┘
      │             │                │                    │
      │ Selects     │                │                    │
@@ -266,25 +282,26 @@ ADK Agent (Nutrition Processing):
      │             │◄───────────────│                    │
 ```
 
-1. Client requests pre-signed upload URLs (`GET /api/media/presign?count=N`).
-2. Backend generates Cloudflare R2 signed PUT URLs (5-minute expiry, max 50 MB/file).
-3. Client uploads **directly to R2** — backend is never a media proxy.
-4. Client submits journal entry with the R2 public URLs.
-5. Backend persists the entry and enqueues async AI enrichment (mood score, tags, summary snippet).
+1. Client requests upload URLs (`GET /api/media/presign?count=N`).
+2. Today, the backend returns a mock presign response pointing at its own `POST /api/media/upload` endpoint (local disk); in production this would generate real object-storage signed PUT URLs.
+3. Client uploads the file (to the backend in dev; directly to object storage in the planned production design).
+4. Client submits the journal entry (`POST /api/journal`) with the resulting public URL(s).
+5. Backend persists the entry and enqueues the `journal_enrich` job for async AI enrichment (mood score, tags, summary snippet), written to the entry's `enrichment` field.
 
 ### 3.4 Workflow 4: Habit Streak Tracking
 
 ```
 Input: "Did my morning meditation and workout today"
 
-ADK Agent:
-  1. Fetches user's habit list via tool: ["meditation", "workout", "reading"]
-  2. Fuzzy NLP match: "meditation" ✓  |  "workout" ✓  |  "reading" ✗
-  3. Returns: habits_completed: ["meditation", "workout"]
+router_agent (single LLM call, no tools):
+  1. Matches mentions against the user's defined habits (fuzzy, in-context — the
+     model is not given a separate habit-lookup tool call)
+  2. Returns habits: [{ habit_name: "meditation", matched_phrase: "morning meditation", completed: true },
+                       { habit_name: "workout", matched_phrase: "workout", completed: true }]
 
-Backend (habit.service.ts):
-  1. Upsert HabitLog: { meditation: completed, workout: completed }
-  2. Recalculate streaks:
+Backend (braindump.routes.ts, inline — no dedicated habit.service.ts):
+  1. For each completed habit, look up today's and yesterday's HabitLog
+  2. Create today's HabitLog with currentStreak = yesterday's streak + 1 (or 1 if none)
      meditation  → 14 days → 15 days ✓
      workout     →  3 days →  4 days ✓
 ```
@@ -304,36 +321,27 @@ Backend (habit.service.ts):
 | **Extensibility** | Adding a new entity type requires refactoring the monolithic prompt | Add a new branch node — zero impact on existing nodes |
 | **Testing** | Must mock the entire API response | Test individual nodes in isolation with typed inputs/outputs |
 
-### 4.2 Agent Persona: "The Sage Cultivator"
+### 4.2 Agent Instruction: `router_agent`
+
+The actual router agent instruction (`agent/app/agent.py`) is intentionally short and generic — it does not (yet) implement the elaborate persona, Indian food reference table, or explicit behavior directives originally envisioned. The current instruction:
 
 ```
-SYSTEM PROMPT (Sage Cultivator Agent):
+SYSTEM PROMPT (router_agent):
 ────────────────────────────────────────
-You are The Cultivator — the intelligent core of the Sage system.
-Your role is to receive raw, unstructured user input (a "seed") and
-nurture it into structured, categorized data (the "roots" of the
-user's Second Brain).
+You are the Sage Universal Input Router.
+The user will provide an unstructured daily log. Your task is to extract
+and route the information into the appropriate structured schemas
+(Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal).
+Do not make up information. Only fill in the fields if they are
+explicitly mentioned or strongly implied.
+```
 
-BEHAVIOR DIRECTIVES:
-1. Parse the input into ALL applicable categories simultaneously.
-   A single sentence may contain nutrition, expense, time, habit,
-   AND journal data. Extract all of them.
-2. NEVER ask for clarification. Make your best inference and commit.
-3. For Indian food items, use the calibrated reference table below.
-   Never refuse to estimate — always provide your best approximation
-   with a confidence indicator (high / medium / low).
-4. Default currency is INR (₹) unless explicitly stated otherwise.
-5. Time references are relative to the user's local timezone.
-6. Habit matching should be fuzzy — "worked out" matches "workout",
-   "meditated" matches "meditation", "read a chapter" matches "reading".
-7. For SLEEP data, extract bedtime, wake time, duration, and subjective
-   quality. Infer quality from phrases like "slept well" (deep),
-   "tossed and turned" (poor), "okay sleep" (moderate).
-8. For SOMATIC LOGS, extract symptom name, severity (1–10), affected
-   body area, any remedy taken, and whether it resolved. Always log
-   these — even minor mentions like "slight headache" or "felt nauseous".
+Structured output is enforced via `output_schema=SageAgentOutput` (a Pydantic model, `agent/app/schemas.py`) rather than a hand-written prompt directive. The agent has no tools — all matching (including habit fuzzy-matching and Indian food macro estimation) is done implicitly by the model in this single call, not via an embedded reference table or a habit-lookup tool.
 
-INDIAN FOOD REFERENCE TABLE:
+The Indian food measurement/macro tables below are a **proposed calibration reference** for a future prompt revision — they are not currently part of the agent's instruction:
+
+```
+INDIAN FOOD REFERENCE TABLE (proposed, not yet implemented):
 ┌─────────────────────┬──────────────┬──────────────────────────┐
 │ Measurement         │ Weight/Vol   │ Notes                    │
 ├─────────────────────┼──────────────┼──────────────────────────┤
@@ -456,109 +464,77 @@ export const BrainDumpResponseSchema = z.object({
 export type BrainDumpResponse = z.infer<typeof BrainDumpResponseSchema>;
 ```
 
+**Known drift:** the Pydantic mirror of `ExpenseData` (`agent/app/schemas.py`) currently defaults `currency` to `"USD"`, not `"INR"` — inconsistent with this Zod schema and with `User.preferences.defaultCurrency` (§5.2). This should be reconciled.
+
 ### 4.4 ADK 2.0 Workflow Graph Definition (Python)
 
 ```python
-# agent/agent.py
+# agent/app/agent.py (abridged — see the file for env/auth setup)
 
+from google.adk.workflow import Workflow, JoinNode, FunctionNode
 from google.adk.agents import LlmAgent
-from google.adk.workflow import Workflow, RetryConfig
-from google.genai import types as genai_types
-from pydantic import BaseModel, Field
-from typing import Optional
-from agent.prompts import CULTIVATOR_SYSTEM_PROMPT
-from agent.schemas import (
-    NutritionOutput, ExpenseOutput, TimeLogOutput,
-    HabitMatch, SleepLog, SomaticLog, JournalMetadata,
-)
-from agent.tools import get_user_habits, persist_entries
+from google.adk.apps import App
+from app.schemas import SageAgentOutput
 
-
-# ── Unified Pydantic Output Schema ──────────────────────────────────
-
-class FullParsedOutput(BaseModel):
-    nutrition:         list[NutritionOutput]  = []
-    expenses:          list[ExpenseOutput]    = []
-    time_logs:         list[TimeLogOutput]    = []
-    habits_completed:  list[HabitMatch]       = []
-    sleep:             Optional[SleepLog]     = None
-    somatic_logs:      list[SomaticLog]       = []
-    journal:           Optional[JournalMetadata] = None
-
-
-# ── LLM Agent: The Cultivator ───────────────────────────────────────
-
-cultivator = LlmAgent(
-    name="cultivator",
+# 1. LLM Router Node
+router_agent = LlmAgent(
+    name="router",
     model="gemini-3.1-flash-lite",
-    instruction=CULTIVATOR_SYSTEM_PROMPT,
-    output_schema=FullParsedOutput,
-    output_key="parsed_result",
-    generate_content_config=genai_types.GenerateContentConfig(
-        temperature=0.1,          # Low temperature for determinism
-        max_output_tokens=4096,
-    ),
-    tools=[get_user_habits],      # Read-only: fetch user's defined habits
+    instruction="""You are the Sage Universal Input Router.
+The user will provide an unstructured daily log. Your task is to extract and route the information into the appropriate structured schemas (Nutrition, Expenses, Time, Habits, Sleep, Somatic, Journal).
+Do not make up information. Only fill in the fields if they are explicitly mentioned or strongly implied.
+""",
+    output_schema=SageAgentOutput,
 )
 
+# 2. Domain Processing Nodes — format each domain into a summary line
+#    (these do NOT write to MongoDB; persistence happens in Node.js
+#    after the agent's HTTP response returns, see §4.7 and braindump.routes.ts)
+def process_nutrition_impl(node_input: dict) -> str | None: ...
+def process_expense_impl(node_input: dict) -> str | None: ...
+def process_time_impl(node_input: dict) -> str | None: ...
+def process_habit_impl(node_input: dict) -> str | None: ...
+def process_sleep_impl(node_input: dict) -> str | None: ...
+def process_somatic_impl(node_input: dict) -> str | None: ...
+def process_journal_impl(node_input: dict) -> str | None: ...
 
-# ── Persistence Node ────────────────────────────────────────────────
+process_nutrition = FunctionNode(func=process_nutrition_impl, name="process_nutrition")
+process_expense   = FunctionNode(func=process_expense_impl, name="process_expense")
+process_time      = FunctionNode(func=process_time_impl, name="process_time")
+process_habit     = FunctionNode(func=process_habit_impl, name="process_habit")
+process_sleep     = FunctionNode(func=process_sleep_impl, name="process_sleep")
+process_somatic   = FunctionNode(func=process_somatic_impl, name="process_somatic")
+process_journal   = FunctionNode(func=process_journal_impl, name="process_journal")
 
-def persist_all(ctx, node_input: dict) -> dict:
-    """
-    Receives the fully parsed output from the cultivator and writes
-    all entity types to MongoDB via pre-defined tool functions.
-    Returns a summary of created entry IDs.
-    """
-    result = FullParsedOutput(**node_input)
-    created_ids = []
+# 3. Join & Combiner
+join_node = JoinNode(name="merge")
 
-    for entity_list, persist_fn in [
-        (result.nutrition,        persist_entries.nutrition),
-        (result.expenses,         persist_entries.expense),
-        (result.time_logs,        persist_entries.time_log),
-        (result.habits_completed, persist_entries.habit),
-    ]:
-        for item in entity_list:
-            entry_id = persist_fn(ctx, item)
-            created_ids.append(entry_id)
+def combine_results_impl(node_input: dict):
+    """Concatenates all non-empty domain summaries into one Event."""
+    ...
+combine_results = FunctionNode(func=combine_results_impl, name="combine_results")
 
-    if result.sleep:
-        entry_id = persist_entries.sleep(ctx, result.sleep)
-        created_ids.append(entry_id)
-
-    for s in result.somatic_logs:
-        entry_id = persist_entries.somatic(ctx, s)
-        created_ids.append(entry_id)
-
-    if result.journal:
-        entry_id = persist_entries.journal(ctx, result.journal)
-        created_ids.append(entry_id)
-
-    return {"entries_created": created_ids}
-
-
-# ── ADK 2.0 Workflow Definition ─────────────────────────────────────
-
+# 4. Graph Definition — unconditional fan-out to all 7 processors, then fan-in
 root_agent = Workflow(
-    name="sage_router",
-    description=(
-        "Sage's Universal Input Router — parses unstructured text "
-        "into structured life data across nutrition, expenses, time, "
-        "habits, and journaling."
-    ),
+    name="root_agent",
     edges=[
-        ('START', cultivator),
-        (cultivator, persist_all),
+        ('START', router_agent),
+        (router_agent, (
+            process_nutrition, process_expense, process_time, process_habit,
+            process_sleep, process_somatic, process_journal,
+        )),
+        ((
+            process_nutrition, process_expense, process_time, process_habit,
+            process_sleep, process_somatic, process_journal,
+        ), join_node),
+        (join_node, combine_results),
     ],
-    retry_config=RetryConfig(
-        max_attempts=3,
-        initial_delay=1.0,
-        backoff_factor=2.0,
-        jitter=0.5,
-    ),
 )
+
+app = App(root_agent=root_agent, name="app")
 ```
+
+Note: this graph has no retry/backoff configuration and no read/write tools — it is purely a routing + text-summarization graph. All MongoDB persistence happens on the Node.js side (`server/src/routes/braindump.routes.ts`) after the FastAPI `/process` endpoint (Appendix D) returns the router's structured JSON, not inside the Python agent.
 
 ### 4.5 Hybrid Multi-Agent Architecture
 
@@ -568,28 +544,26 @@ Sage uses a **hybrid multi-agent pattern** — a fast synchronous core agent for
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│                          sage_router Workflow                                │
+│                  root_agent Workflow (Python/ADK, in the agent service)      │
 │                                                                               │
-│  ┌─────────┐     ┌───────────────────────┐     ┌───────────────────────────┐  │
-│  │  START  │────►│   cultivator          │────►│     persist_all           │  │
-│  │         │     │   (LlmAgent)          │     │     (Function)            │  │
-│  │ User    │     │                       │     │                           │  │
-│  │ text    │     │ Model: gemini-3.1-    │     │ • Write nutrition entries  │  │
-│  │ + userId│     │        flash          │     │ • Write expense entries    │  │
-│  │         │     │                       │     │ • Write time log entries   │  │
-│  │         │     │ Schema: FullParsed    │     │ • Write sleep logs         │  │
-│  │         │     │         Output        │     │ • Write somatic logs       │  │
-│  │         │     │                       │     │ • Upsert habit logs        │  │
-│  │         │     │ Parses ALL 7 domains  │     │ • Save journal entry       │  │
-│  │         │     │ in one LLM call       │     │                           │  │
-│  │         │     │                       │     │ Enqueues async tasks ─────┐│  │
-│  │         │     │ Tool: get_user_habits │     │                          ││  │
-│  └─────────┘     └───────────────────────┘     └──────────────────────────┘│  │
-│                                                                            │  │
-│  Synchronous — p95 latency target: < 5s                                   │  │
-└───────────────────────────────────────────────────────────────────────────┘│
-                                                                             │
-  ┌──────────────────────────────────────────────────────────────────────────┘
+│  ┌─────────┐   ┌────────────────┐   ┌────────────────────┐   ┌─────────────┐ │
+│  │  START  │──►│  router_agent  │──►│ 7 domain FunctionNodes│─►│ join ("merge")│ │
+│  │         │   │  (LlmAgent)    │   │ (process_nutrition,   │  │ → combine_   │ │
+│  │ User    │   │                │   │  process_expense, ...)│  │   results    │ │
+│  │ text    │   │ Model: gemini- │   │ Format each domain's  │  │              │ │
+│  │         │   │ 3.1-flash-lite │   │ parsed data into a    │  │ Concatenates │ │
+│  │         │   │ Schema:        │   │ human-readable summary│  │ non-empty    │ │
+│  │         │   │ SageAgentOutput│   │ line                  │  │ summary lines│ │
+│  │         │   │ (no tools)     │   │                       │  │              │ │
+│  └─────────┘   └────────────────┘   └────────────────────┘   └─────────────┘ │
+│                                                                               │
+│  Synchronous — p95 latency target: < 5s                                     │
+└───────────────────────────────────────────────────────────────────────────────┘
+              │
+              │  Node.js (braindump.routes.ts) persists the router's structured
+              │  JSON to MongoDB, then enqueues async specialist jobs (BullMQ)
+              ▼
+  ┌──────────────────────────────────────────────────────────────────────────
   │
   │  ASYNC SPECIALIST AGENTS (Background — non-blocking to user)
   │
@@ -616,7 +590,7 @@ Sage uses a **hybrid multi-agent pattern** — a fast synchronous core agent for
 
 | Layer | Agents | Execution | Latency Impact |
 |-------|--------|-----------|----------------|
-| **Synchronous Core** | `cultivator` (single LlmAgent) | Inline — blocks the HTTP response | 2–4s (one Gemini round-trip) |
+| **Synchronous Core** | `router_agent` (single LlmAgent) + 7 domain `FunctionNode`s + `JoinNode` | Inline — blocks the HTTP response | 2–4s (one Gemini round-trip; node fan-out/join is local, near-instant) |
 | **Async Specialists** | `journal_enricher`, `sleep_analyzer`, `somatic_correlator`, `expense_analyzer`, `time_analyzer`, `insight_synthesizer` | Background — queued after persist / end of day | 0s (invisible to user) |
 
 This architecture preserves the **zero-friction, instant-feedback** promise of the Brand Identity while enabling deep, multi-domain intelligence that runs silently in the background.
@@ -624,30 +598,30 @@ This architecture preserves the **zero-friction, instant-feedback** promise of t
 ### 4.6 Async Specialist Agent Definitions
 
 ```python
-# agent/specialists.py
+# agent/app/specialists.py
 
 from google.adk.agents import LlmAgent
-from agent.schemas import (
+from google.adk.workflow import Workflow
+from google.adk.apps import App
+
+from app.schemas import (
     JournalMetadata, SleepAnalysis, SomaticCorrelation,
     ExpenseAnalysis, TimeAnalysis, WeeklyInsight,
 )
-
 
 journal_enricher = LlmAgent(
     name="journal_enricher",
     model="gemini-3.1-flash-lite",
     instruction="""
     You are a reflective journaling assistant. Given a raw journal entry, produce:
-    1. mood_score (1–10, where 10 is peak positivity)
-    2. 3–5 thematic tags (e.g. "fitness", "deep-work", "stress", "family")
+    1. mood_score (1-10, where 10 is peak positivity)
+    2. 3-5 thematic tags (e.g. "fitness", "deep-work", "stress", "family")
     3. summary_snippet: a single-sentence TL;DR of the day
 
     Be empathetic but objective. Do not project emotions not present in the text.
     """,
     output_schema=JournalMetadata,
-    output_key="journal_enrichment",
 )
-
 
 sleep_analyzer = LlmAgent(
     name="sleep_analyzer",
@@ -655,15 +629,13 @@ sleep_analyzer = LlmAgent(
     instruction="""
     You are a sleep quality analyst. Given a user's sleep log and their
     recent 7-day sleep history, produce:
-    1. consistency_score (1–10): How regular is their sleep/wake schedule?
+    1. consistency_score (1-10): How regular is their sleep/wake schedule?
     2. circadian_alignment: "aligned", "slightly_shifted", or "misaligned"
     3. recommendation: A single actionable tip (e.g., "Consider a consistent
        10:30 PM bedtime to align with your natural wake pattern.")
     """,
     output_schema=SleepAnalysis,
-    output_key="sleep_analysis",
 )
-
 
 somatic_correlator = LlmAgent(
     name="somatic_correlator",
@@ -681,9 +653,7 @@ somatic_correlator = LlmAgent(
     observations, never as diagnoses. Include a disclaimer.
     """,
     output_schema=SomaticCorrelation,
-    output_key="somatic_correlation",
 )
-
 
 expense_analyzer = LlmAgent(
     name="expense_analyzer",
@@ -698,9 +668,7 @@ expense_analyzer = LlmAgent(
        correlates with your 'stressed' mood tag.")
     """,
     output_schema=ExpenseAnalysis,
-    output_key="expense_analysis",
 )
-
 
 time_analyzer = LlmAgent(
     name="time_analyzer",
@@ -714,9 +682,7 @@ time_analyzer = LlmAgent(
        in the morning; protect this window tomorrow.")
     """,
     output_schema=TimeAnalysis,
-    output_key="time_analysis",
 )
-
 
 insight_synthesizer = LlmAgent(
     name="insight_synthesizer",
@@ -726,14 +692,31 @@ insight_synthesizer = LlmAgent(
     across all 7 domains (nutrition, expenses, time, habits, sleep, somatic,
     journal) for the past 7 days, produce:
     1. top_insight: The single most impactful cross-domain correlation.
-    2. supporting_data: 2–3 data points that support the insight.
+    2. supporting_data: 2-3 data points that support the insight.
     3. growth_area: One area where the user can improve next week.
     4. celebration: One thing the user did well this week.
     """,
     output_schema=WeeklyInsight,
-    output_key="weekly_insight",
 )
+
+# Each specialist is a single LLM call, so it only needs a trivial one-node
+# Workflow (no fan-out/join like the router's domain-processing graph).
+SPECIALISTS = {
+    "journal_enricher": journal_enricher,
+    "sleep_analyzer": sleep_analyzer,
+    "somatic_correlator": somatic_correlator,
+    "expense_analyzer": expense_analyzer,
+    "time_analyzer": time_analyzer,
+    "insight_synthesizer": insight_synthesizer,
+}
+
+SPECIALIST_APPS = {
+    name: App(root_agent=Workflow(name=f"{name}_workflow", edges=[("START", agent)]), name=name)
+    for name, agent in SPECIALISTS.items()
+}
 ```
+
+Each specialist is invoked over HTTP via `POST /specialists/{name}` (Appendix D), keyed by request body, not ADK's `output_key` state mechanism — the Node.js caller (`agent.service.ts`) reads the specialist's JSON response directly and validates it against the matching Zod schema (`SPECIALIST_SCHEMAS[name]`) before writing it into the triggering entry's `enrichment` field (§5.3).
 
 ### 4.7 Agent Orchestration: Sync vs. Async Flow
 
@@ -743,10 +726,11 @@ User submits brain dump
         ▼
 ┌─── SYNCHRONOUS (blocks response) ───────────────────────────┐
 │                                                              │
-│   cultivator (LlmAgent)  →  persist_all (Function)          │
+│   router_agent (LlmAgent) → 7 domain FunctionNodes → JoinNode│
 │   • 1 LLM call                                              │
 │   • Parses all 7 domains                                    │
-│   • Returns structured entries to client                     │
+│   • Node.js persists structured entries to MongoDB and       │
+│     returns them to the client                               │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
         │
@@ -757,7 +741,9 @@ User submits brain dump
 │                                                              │
 │   IF journal entry was created:                              │
 │       → Enqueue journal_enricher                             │
-│       → Updates: mood_score, tags, summary_snippet           │
+│       → Writes to entry.enrichment.journal_enrichment only   │
+│         (does NOT overwrite the entry's own mood_score/tags/  │
+│         summary_snippet, which come from the router call)    │
 │                                                              │
 │   IF sleep log was created:                                  │
 │       → Enqueue sleep_analyzer                               │
@@ -926,7 +912,7 @@ export const Entry = mongoose.model<IEntry>('Entry', EntrySchema);
 | `journal` | `{ text, media_urls[], mood_score, tags[], summary_snippet, ai_enriched }` |
 | `weekly_insight` | `{ top_insight, supporting_data[], growth_area, celebration }` |
 
-**`enrichment` field:** `null` until the corresponding async specialist (§4.6) finishes background processing. Shape depends on entry `type`: `sleep` → `SleepAnalysis` (`{ consistency_score, circadian_alignment, recommendation }`, output_key `sleep_analysis`); `somatic_log` → `SomaticCorrelation` (`{ potential_triggers[], confidence, suggestion }`, output_key `somatic_correlation`); `expense` → `ExpenseAnalysis` (`{ anomaly_flag, subscription_creep, insight }`, output_key `expense_analysis`); `time_log` → `TimeAnalysis` (`{ deep_work_ratio, time_drain, optimization_tip }`, output_key `time_analysis`). `nutrition` and `journal` entries receive no `enrichment` payload; `weekly_insight` entries have no `enrichment` (they *are* the output of `insight_synthesizer`).
+**`enrichment` field:** `null` until the corresponding async specialist (§4.6) finishes background processing. Shape depends on entry `type`: `sleep` → `{ sleep_analysis: SleepAnalysis }`; `somatic_log` → `{ somatic_correlation: SomaticCorrelation }`; `expense` → `{ expense_analysis: ExpenseAnalysis }`; `time_log` → `{ time_analysis: TimeAnalysis }`; `journal` → `{ journal_enrichment: JournalMetadata }` (a *second*, richer mood/tags/summary pass — it does not overwrite the `mood_score`/`tags`/`summary_snippet` already present in `data`, which come from the synchronous router call). `nutrition` entries receive no `enrichment` payload; `weekly_insight` entries have no `enrichment` (they *are* the output of `insight_synthesizer`). Note: `journal_enrichment` is not currently surfaced anywhere in the client UI (`InsightsPanel.tsx` only reads the other three enrichment keys) — it is written but not yet displayed.
 
 ### 5.4 HabitLogs Collection
 
@@ -987,16 +973,17 @@ export const HabitLog = mongoose.model<IHabitLog>('HabitLog', HabitLogSchema);
 | `POST` | `/api/auth/login` | None | `{ email, password }` | `{ user, accessToken }` |
 | `POST` | `/api/auth/refresh` | Cookie | *(HTTP-only cookie)* | `{ accessToken }` |
 | `POST` | `/api/auth/logout` | JWT | — | `{ success: true }` |
+| `POST` | `/api/auth/demo-login` | None | — | `{ user, accessToken }` — logs in as the seeded demo user; disabled (404) when `NODE_ENV=production` |
 
 ### 6.2 Core Data
 
 | Method | Endpoint | Auth | Request / Query | Response |
 |--------|----------|------|-----------------|----------|
-| `POST` | `/api/braindump` | JWT | `{ text, timestamp? }` | `{ braindump_id, entries_created[], habits_updated[] }` |
+| `POST` | `/api/braindump` | JWT | `{ text, timestamp? }` | `{ braindump_id, entries_created[], habits_updated[], parsed_data }` |
 | `GET` | `/api/dashboard/today` | JWT | — | `{ entries: Entry[], habits: HabitLog[] }` |
 | `GET` | `/api/dashboard/summary` | JWT | `?range=week\|month&date=` | `{ totals: { calories, expenses, hours }, streaks[] }` |
 | `GET` | `/api/dashboard/insights` | JWT | — | `{ weeklyInsight: { date, data } \| null, recentEnrichments: [{ entryId, type, date, enrichment }] }` |
-| `GET` | `/api/entries` | JWT | `?type=&from=&to=&page=1&limit=20` | `{ entries[], pagination }` |
+| `GET` | `/api/entries` | JWT | `?type=&page=1&limit=20` (no `from`/`to` date-range filtering implemented yet) | `{ entries[], pagination }` |
 | `GET` | `/api/entries/:id` | JWT | — | `{ entry }` |
 | `PATCH` | `/api/entries/:id` | JWT | `{ data: Partial<EntryData> }` | `{ entry }` |
 | `DELETE` | `/api/entries/:id` | JWT | — | `{ success: true }` |
@@ -1010,7 +997,7 @@ export const HabitLog = mongoose.model<IHabitLog>('HabitLog', HabitLogSchema);
 
 | Method | Endpoint | Auth | Request Body | Response |
 |--------|----------|------|-------------|----------|
-| `GET` | `/api/habits` | JWT | — | `{ habits: [{ name, icon, streak, completedToday }] }` |
+| `GET` | `/api/habits` | JWT | — | `{ habits: [{ name, aliases, icon, createdAt, completedToday }] }` — note: no `streak` field is computed/returned here; streak values live on individual `HabitLog` documents, not this summary endpoint |
 | `POST` | `/api/habits` | JWT | `{ name, aliases?, icon? }` | `{ habit }` |
 | `DELETE` | `/api/habits/:name` | JWT | — | `{ success: true }` |
 | `POST` | `/api/habits/:name/toggle` | JWT | — | `{ log: HabitLog }` |
@@ -1021,7 +1008,8 @@ export const HabitLog = mongoose.model<IHabitLog>('HabitLog', HabitLogSchema);
 |--------|----------|------|-----------------|----------|
 | `POST` | `/api/journal` | JWT | `{ text, media_urls? }` | `{ entry }` |
 | `GET` | `/api/journal/recent` | JWT | `?limit=10&offset=0` | `{ entries[] }` |
-| `GET` | `/api/media/presign` | JWT | `?count=1&types=image/jpeg` | `{ urls: [{ uploadUrl, publicUrl, expiresAt }] }` |
+| `GET` | `/api/media/presign` | JWT | `?count=1&types=image/jpeg` | `{ urls: [{ uploadUrl, publicUrl, expiresAt }] }` — currently returns mock URLs pointing at `/api/media/upload` (local disk); not real object-storage presigned URLs yet |
+| `POST` | `/api/media/upload` | JWT | `multipart/form-data`, field `file` | `{ publicUrl }` — local-disk upload handler backing the mocked presign flow above |
 
 ### 6.5 User Settings
 
@@ -1175,7 +1163,7 @@ by their shared `braindump_id` (§5.3, §5.4).
 | First Contentful Paint | < 1.5 s | Vite code splitting, preloaded critical CSS |
 | Brain dump round-trip | < 5 s (p95) | Gemini Flash low-latency, ADK schema validation short-circuits |
 | Dashboard load | < 800 ms | MongoDB compound indexes, single `/dashboard/today` fetch on mount (no client-side query cache), `.lean()` queries |
-| Media upload | Direct-to-R2 | Client uploads bypass backend — no proxy hop |
+| Media upload | Local disk (dev) | Direct-to-object-storage upload is the production design target, not yet implemented |
 | JS bundle size | < 250 KB gzipped | Tree-shaking, dynamic imports for chart components |
 
 ### 7.5 Error Handling Matrix
@@ -1185,7 +1173,7 @@ by their shared `braindump_id` (§5.3, §5.4).
 | LLM returns malformed JSON | Show "partially processed" + retry CTA | Zod catches; return 422 with partial results |
 | LLM timeout (> 30 s) | Retain text; show timeout toast | ADK `RetryConfig` tries 3×; if all fail, return 504 |
 | MongoDB write failure | Rollback optimistic UI | Return 500; use Mongoose sessions for atomicity |
-| R2 upload failure | Client retries 3× | Pre-signed URL still valid; client retries directly |
+| Media upload failure | Client retries 3× | Local disk today; pre-signed URL retry model applies once object storage is implemented |
 | JWT expired | Silent refresh via cookie | Return 401; client calls `/api/auth/refresh` |
 | Rate limit exceeded | Show cool-down timer | Return 429 with `Retry-After` header |
 
@@ -1194,7 +1182,7 @@ by their shared `braindump_id` (§5.3, §5.4).
 1. **Schema enforcement** — ADK 2.0's `output_schema` forces the LLM to return valid Pydantic-typed JSON. Injected instructions that attempt to alter the output format are rejected by the schema validator before the response reaches the backend.
 2. **Input sanitization** — Strip HTML/script tags from user text via `xss` library before sending to the agent.
 3. **Output bounds validation** — Zod validates every field. Out-of-bounds values (e.g., `calories: -500`, `mood_score: 99`) are rejected at the backend layer.
-4. **No destructive tools** — The agent's only tool is `get_user_habits` (read-only). All writes occur in the `persist_all` backend function after schema validation, not inside the agent.
+4. **No destructive tools** — `router_agent` has no tools at all (read or write); it only returns structured JSON. All MongoDB writes occur in the Node.js backend (`braindump.routes.ts`) after schema validation, not inside the agent.
 
 ---
 
@@ -1217,21 +1205,25 @@ JWT_ACCESS_EXPIRY=15m
 JWT_REFRESH_EXPIRY=7d
 BCRYPT_COST_FACTOR=12
 
-# ── MongoDB ───────────────────────────────
-MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/sage?retryWrites=true&w=majority
+# ── MongoDB ────────────────────────────────
+# Leave unset to auto-start a persistent embedded MongoDB for local dev.
+# Set this to use a real instance instead (Atlas, staging, etc).
+# MONGODB_URI=mongodb+srv://<user>:<pass>@cluster.mongodb.net/sage?retryWrites=true&w=majority
+
+# ── Redis (BullMQ specialist job queues) ──
+# Leave unset to auto-start an in-memory Redis for local dev.
+# REDIS_URL=
 
 # ── Google AI / ADK ───────────────────────
-GOOGLE_GENAI_API_KEY=<gemini-api-key>
 ADK_AGENT_URL=http://localhost:8001    # Python agent microservice
-ADK_MODEL=gemini-3.1-flash-lite
 
-# ── Cloudflare R2 ─────────────────────────
-R2_ACCOUNT_ID=<cloudflare-account-id>
-R2_ACCESS_KEY_ID=<r2-access-key>
-R2_SECRET_ACCESS_KEY=<r2-secret-key>
-R2_BUCKET_NAME=sage-media
-R2_PUBLIC_URL=https://media.sage.app
-R2_PRESIGN_EXPIRY_SECONDS=300
+# agent/.env (separate service, not the server's .env):
+# GEMINI_API_KEY=<gemini-api-key>       # or GOOGLE_CLOUD_PROJECT for Vertex AI
+
+# ── Media Storage ─────────────────────────
+# No env vars today — local disk storage under server/uploads/.
+# Cloudflare R2 (or another S3-compatible store) is the planned production
+# target; its credentials are not yet part of the configuration surface.
 ```
 
 ### Appendix B: Project Directory Structure
@@ -1284,22 +1276,29 @@ sage/
 │   │   │   ├── Entry.ts
 │   │   │   └── HabitLog.ts
 │   │   ├── services/
-│   │   │   ├── agent.service.ts     # ADK 2.0 HTTP invocation
-│   │   │   ├── habit.service.ts     # Streak calculation
-│   │   │   └── media.service.ts     # R2 signed URL generation
+│   │   │   ├── agent.service.ts     # ADK 2.0 HTTP invocation (router + specialists)
+│   │   │   └── media.service.ts     # Local-disk storage + mock presign (§2.1)
+│   │   ├── queues/                  # BullMQ job definitions, Redis connection, Bull Board admin UI
+│   │   │   └── handlers/            # journalEnrich, sleepAnalyze, somaticCorrelate, expenseAnalyze, timeAnalyze, insightSynthesize, dailySweep
 │   │   ├── utils/
-│   │   │   └── timezone.ts          # getUserLocalMidnight, getUserLocalDayBounds, getLocalCalendarAnchor
+│   │   │   ├── timezone.ts          # getUserLocalMidnight, getUserLocalDayBounds, getLocalCalendarAnchor
+│   │   │   └── logger.ts            # Winston logger
 │   │   ├── config/db.ts
 │   │   └── app.ts
 │   └── tsconfig.json
 │
 ├── agent/                           # ADK 2.0 Python microservice
-│   ├── __init__.py
-│   ├── agent.py                     # root_agent (Workflow)
-│   ├── schemas.py                   # Pydantic output schemas
-│   ├── tools.py                     # get_user_habits, persist_entries
-│   ├── prompts.py                   # CULTIVATOR_SYSTEM_PROMPT
-│   ├── server.py                    # FastAPI wrapper
+│   ├── app/
+│   │   ├── agent.py                 # root_agent (Workflow): router_agent + fan-out/join
+│   │   ├── specialists.py           # Async specialist LlmAgents
+│   │   ├── schemas.py                # Pydantic I/O schemas (SageAgentOutput, etc.)
+│   │   ├── fast_api_app.py          # FastAPI wrapper (/process, /specialists/{name})
+│   │   └── app_utils/               # a2a.py, telemetry.py, services.py, typing.py
+│   ├── tests/                       # unit/, integration/, eval/
+│   ├── deployment/terraform/        # Cloud Run infra
+│   ├── Dockerfile
+│   ├── agents-cli-manifest.yaml
+│   ├── dataset.jsonl                # Eval dataset
 │   └── .env
 │
 ├── shared/                          # @sage/shared — Zod schemas + TS types
@@ -1307,7 +1306,6 @@ sage/
 │   ├── schemas/auth.ts
 │   └── package.json
 │
-├── docker-compose.yml               # Local MongoDB
 ├── .env.example
 ├── pnpm-workspace.yaml
 └── README.md
@@ -1315,112 +1313,98 @@ sage/
 
 ### Appendix C: Tailwind Design Token Configuration
 
-```typescript
-// client/tailwind.config.ts
+```javascript
+// client/tailwind.config.js
 
-import type { Config } from 'tailwindcss';
-
+/** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./src/**/*.{ts,tsx}'],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
-      colors: {
-        sage: {
-          cream:    '#FAF8F5',   // Primary background
-          sand:     '#F0EBE3',   // Secondary background / cards
-          bark:     '#8B7355',   // Accent brown
-          forest:   '#2D5016',   // Primary green (deep forest)
-          sage:     '#87A96B',   // Secondary green
-          moss:     '#4A7C59',   // Tertiary green
-          charcoal: '#2C2C2C',   // Text primary
-          stone:    '#6B6B6B',   // Text secondary
-        },
-      },
       fontFamily: {
-        serif: ['Lora', 'Georgia', 'serif'],         // Journaling / reflective
-        sans:  ['Inter', 'system-ui', 'sans-serif'], // Data / dashboard
+        sans: ['"Space Grotesk"', '"Inter"', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        glow: '0 0 40px 0 rgba(139, 92, 246, 0.35)',
+        'glow-lg': '0 0 80px 10px rgba(6, 182, 212, 0.25)',
       },
       animation: {
-        'breathe':  'breathe 3s ease-in-out infinite',
-        'absorb':   'absorb 0.6s ease-out forwards',
-        'fade-up':  'fadeUp 0.4s ease-out forwards',
+        'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
+        'gradient-pan': 'gradient-pan 6s ease infinite',
       },
       keyframes: {
-        breathe: {
-          '0%, 100%': { opacity: '0.6', transform: 'scale(1)' },
-          '50%':      { opacity: '1',   transform: 'scale(1.02)' },
+        'pulse-glow': {
+          '0%, 100%': { opacity: '0.5', transform: 'scale(0.98)' },
+          '50%': { opacity: '1', transform: 'scale(1.03)' },
         },
-        absorb: {
-          '0%':   { opacity: '1', transform: 'translateY(0) scale(1)' },
-          '100%': { opacity: '0', transform: 'translateY(-10px) scale(0.95)' },
-        },
-        fadeUp: {
-          '0%':   { opacity: '0', transform: 'translateY(10px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
+        'gradient-pan': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
         },
       },
     },
   },
   plugins: [],
-} satisfies Config;
+}
 ```
+
+Color tokens themselves are not defined here — they live as CSS custom properties in `client/src/index.css`, switched by the `data-theme` attribute (`dark` | `light`) on `<html>`: `--nova-bg`, `--nova-surface`, `--nova-border`, `--nova-text-primary`, `--nova-text-muted`, `--nova-violet`, `--nova-cyan` (see Brand Identity §3 for the actual hex values per theme).
 
 ### Appendix D: ADK Agent ↔ Node.js Integration Pattern
 
 ADK 2.0 is a Python framework; the backend is Node.js. The recommended integration is an **HTTP microservice**:
 
 ```python
-# agent/server.py  (FastAPI wrapper)
-
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
-from agent.agent import root_agent
-
-app = FastAPI()
-session_service = InMemorySessionService()
-runner = Runner(
-    agent=root_agent,
-    app_name="sage",
-    session_service=session_service,
-)
-
-class BrainDumpRequest(BaseModel):
-    user_id: str
-    text:    str
+# agent/app/fast_api_app.py (abridged)
 
 @app.post("/process")
 async def process_braindump(payload: BrainDumpRequest):
-    session = await session_service.create_session(
-        app_name="sage",
-        user_id=payload.user_id,
-    )
-    user_message = types.Content(
-        role="user",
-        parts=[types.Part(text=payload.text)]
-    )
-    result = None
+    session = await session_service.create_session(app_name="app", user_id=payload.user_id)
+    user_message = types.Content(role="user", parts=[types.Part(text=payload.text)])
+
+    # Read the router node's raw text output directly off the event stream
+    # (author == "router"), rather than via ADK output_key/state_delta.
+    router_output_str = None
     async for event in runner.run_async(
-        session_id=session.id,
-        user_id=payload.user_id,
-        new_message=user_message,
+        session_id=session.id, user_id=payload.user_id, new_message=user_message,
     ):
-        if event.actions and event.actions.state_delta:
-            if "parsed_result" in event.actions.state_delta:
-                result = event.actions.state_delta["parsed_result"]
+        if event.author == "router" and event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    router_output_str = part.text
 
-    if result is None:
-        raise HTTPException(status_code=500, detail="Agent produced no output")
+    if not router_output_str:
+        raise HTTPException(status_code=500, detail="Agent produced no parsed output")
 
-    return result
+    router_output = json.loads(router_output_str)
+    return {
+        "nutrition": router_output.get("nutrition") or [],
+        "expenses": router_output.get("expenses") or [],
+        "time_logs": router_output.get("time_logs") or [],
+        "habits_completed": router_output.get("habits") or [],
+        "sleep": router_output.get("sleep"),
+        "somatic_logs": router_output.get("somatic_logs") or [],
+        "journal": router_output.get("journal"),
+        "raw_text": payload.text,
+        "parsed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+@app.post("/specialists/{name}")
+async def run_specialist(name: str, request: Request, payload: SpecialistRequest):
+    runner = request.app.state.specialist_runners.get(name)
+    if runner is None:
+        raise HTTPException(status_code=404, detail=f"Unknown specialist: {name}")
+    # ... creates a session, sends payload.context as the user message,
+    # reads the matching author's text output, and json.loads()s it — same
+    # pattern as /process above.
 ```
 
 ```typescript
 // server/src/services/agent.service.ts
 
-import { BrainDumpResponseSchema } from '@sage/shared';
+import { BrainDumpResponseSchema, SPECIALIST_SCHEMAS, SpecialistName } from '@sage/shared';
+import logger from '../utils/logger';
 
 const ADK_AGENT_URL = process.env.ADK_AGENT_URL ?? 'http://localhost:8001';
 
@@ -1431,15 +1415,27 @@ export async function processBrainDump(userId: string, text: string) {
     body: JSON.stringify({ user_id: userId, text }),
     signal: AbortSignal.timeout(30_000),   // 30s hard timeout
   });
-
-  if (!response.ok) {
-    throw new Error(`Agent service error: ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`Agent service error: ${response.status}`);
   // Validate agent output before trusting it
   return BrainDumpResponseSchema.parse(await response.json());
 }
+
+export async function runSpecialist<T extends SpecialistName>(
+  name: T, userId: string, context: object,
+) {
+  const response = await fetch(`${ADK_AGENT_URL}/specialists/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, context }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`Specialist agent error (${name}): ${response.status}`);
+  // Validate specialist output before trusting it
+  return SPECIALIST_SCHEMAS[name].parse(await response.json());
+}
 ```
+
+Both `/process` and `/specialists/{name}` are called by BullMQ job handlers (`server/src/queues/handlers/*.ts`), not just the synchronous `/api/braindump` path — e.g. `sleepAnalyze.ts`, `somaticCorrelate.ts`, `expenseAnalyze.ts`, `timeAnalyze.ts`, `journalEnrich.ts`, and the weekly `insightSynthesize.ts` handler triggered by the recurring `dailySweep.ts` job.
 
 ---
 
@@ -1456,3 +1452,4 @@ export async function processBrainDump(userId: string, text: string) {
 | 1.2 | July 5, 2026 | System Architecture Team | Added expense_analyzer and time_analyzer async specialist agents |
 | 1.3 | July 6, 2026 | System Architecture Team | Added braindump-linked habit logs, GET /api/dashboard/insights (weekly insight + specialist enrichment surfacing), timezone-safe day-boundary calculation, and persistent optimistic-UI activity feed (FeedItem, feed hydration on reload) |
 | 1.4 | July 6, 2026 | System Architecture Team | Removed the v1/v2 dual-UI system; promoted the Nova UI to be the app's sole client (Composer, ActivityFeed, InsightsPanel, AppShell) |
+| 1.5 | July 7, 2026 | System Architecture Team | Synced §1, §2, §3, §4, §5.3, §6, §7, and Appendices A–D with the actual implementation: replaced the fictional `cultivator`/`persist_all`/`tools.py`/`prompts.py` agent design with the real `router_agent` + `FunctionNode` fan-out/`JoinNode` graph (no tools); documented the BullMQ/Redis job queue subsystem; corrected media storage (local disk today, not Cloudflare R2), stack versions (Express 4.x, Mongoose 8.x, Tailwind 3.x, TS 6.x client / 5.x server, no Node 26 pin), and dropped the fictional Docker Compose dependency; fixed endpoint contracts (`/api/entries` has no date filter, `/api/habits` has no `streak` field, added `/api/auth/demo-login` and `/api/media/upload`); corrected the `journal` entry `enrichment` behavior and the ExpenseData currency (USD/INR) schema drift |

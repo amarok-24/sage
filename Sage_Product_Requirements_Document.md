@@ -19,7 +19,7 @@ A unified, zero-friction web application designed around a "Universal Input Port
 ## 2. Core Principles
 * **Zero-Friction Entry:** The interface must prioritize a single, prominent input field.
 * **Cloud-First AI:** Offload all heavy inferencing (LLM routing, macro estimation, tagging) to a cloud API (e.g., Gemini 3.1 Flash Lite) to preserve local system RAM and compute.
-* **Text-First, Multi-Entity Routing:** A single input string (e.g., *"Spent 150 INR on paneer tikka, spent 1 hour coding, checked off my study habits, slept 8 hours, felt great."*) must concurrently update the database records across all six pillars.
+* **Text-First, Multi-Entity Routing:** A single input string (e.g., *"Spent 150 INR on paneer tikka, spent 1 hour coding, checked off my study habits, slept 8 hours, felt great."*) must concurrently update the database records across all seven domains (nutrition, expenses, time, habits, sleep, somatic, journal).
 
 ---
 
@@ -28,7 +28,7 @@ A unified, zero-friction web application designed around a "Universal Input Port
 ### 3.1 The Universal Input Portal
 * **Description:** A primary text input console where the user logs their day conversationally. 
 * **Mechanics:**
-  * Accepts raw text input.
+  * Accepts raw text input, including via free browser-based voice dictation (Web Speech API) that transcribes into the same field.
   * Sends text to the Cloud LLM configured with a strict, multi-entity JSON response schema.
   * Backend routes the returned JSON objects to their respective database collections.
 
@@ -61,6 +61,7 @@ A unified, zero-friction web application designed around a "Universal Input Port
 * **Key Capabilities:**
   * Validates if a defined habit was mentioned in the text block.
   * Automatically flags the habit as `completed = true` for the current date.
+  * Also supports a manual toggle path, independent of the brain dump, for marking a habit complete/incomplete directly.
 
 ### 3.6 Sleep (Rest)
 * **Description:** Logs rest patterns from natural language input and tracks sleep quality over time.
@@ -83,8 +84,8 @@ A unified, zero-friction web application designed around a "Universal Input Port
 ### 3.8 Journal (Reflections)
 * **Description:** A reflective diary capturing subjective experiences, combined with media attachments and automated insights.
 * **Key Capabilities:**
-  * **Media Uploads:** Supports image and video attachments. Media is directly uploaded to a cloud storage bucket, and public URLs are saved to the database.
-  * **AI Asynchronous Enrichment:** Once a journal entry is saved, background specialist agents process the text to generate insights (mood, tags, summary).
+  * **Media Uploads:** Backend supports image and video attachments via a presign/upload API; local disk storage is used for development, with a cloud storage bucket (e.g. Cloudflare R2) as the production target. No client UI is wired up to this flow yet — journal entries are currently created via the brain dump or the standalone `/api/journal` endpoint, without media.
+  * **AI Asynchronous Enrichment:** Once a journal entry is saved, a background specialist agent (`journal_enricher`) processes the text to generate supplementary insights (mood, tags, summary), surfaced via `GET /api/dashboard/insights`. The mood/tags/summary shown on the entry itself come from the synchronous router call at braindump time.
 * **AI Output Schema (Metadata):**
   * `mood_score`: Integer from 1 to 10.
   * `tags`: Array of 3-5 thematic strings (e.g., "fitness", "deep-work").
@@ -96,25 +97,24 @@ A unified, zero-friction web application designed around a "Universal Input Port
 
 ### 4.1 Frontend Layer
 * **Platform:** Web Application (Accessible via desktop/mobile browsers).
-* **Framework:** React 19 + Vite 6 + Tailwind CSS 4.
-* **Media Handling:** Native HTML file inputs for decoupled cloud storage (Cloudflare R2) uploads.
+* **Framework:** React 19 + Vite 6 + Tailwind CSS 3.
+* **Media Handling:** Backend presign/upload API for decoupled cloud storage uploads (local disk today; Cloudflare R2 or another S3-compatible store planned for production). No client UI is wired up to this yet.
 
 ### 4.2 Backend Layer
-* **Framework:** Node.js 26 LTS (Express).
+* **Framework:** Node.js (Express).
 * **Role:**
-  1. Serve the frontend application APIs.
-  2. Provide REST/GraphQL endpoints.
-  3. Manage Cloud Storage signed URLs for media uploads.
-  4. Communicate with the Cloud LLM (Gemini 3.1 Flash Lite) via official SDKs.
-  5. Route LLM outputs to the database.
+  1. Serve the frontend application's REST APIs.
+  2. Manage signed URLs / local storage for media uploads.
+  3. Communicate with the Cloud LLM agent (Gemini 3.1 Flash Lite) via an HTTP microservice.
+  4. Route LLM outputs to the database, and queue background specialist agent jobs (BullMQ + Redis) for enrichment and weekly insights.
 
 ### 4.3 Data Storage Layer
-* **Database:** MongoDB Atlas (Free Tier). Stores textual data, JSON metadata, and relationships.
-* **Blob/Media Storage:** Cloudflare R2. Stores physical images and videos.
+* **Database:** MongoDB (Atlas free tier in production; an embedded in-process MongoDB for local dev). Stores textual data, JSON metadata, and relationships.
+* **Blob/Media Storage:** Local disk today; a cloud object store (e.g. Cloudflare R2) is the planned production target.
 
 ### 4.4 Artificial Intelligence Layer
 * **Model:** Google Gemini 3.1 Flash Lite.
-* **Technique:** `response_schema` enforcement using Pydantic (Python) or Zod (TypeScript) validation objects to ensure 100% predictable JSON outputs.
+* **Technique:** `response_schema` enforcement using Pydantic (Python) or Zod (TypeScript) validation objects to ensure 100% predictable JSON outputs. Note: the Pydantic and Zod schemas have drifted on one field — `ExpenseData.currency` defaults to `"USD"` on the Python/agent side but `"INR"` on the Zod/Node side (and `"INR"` is the user preference default) — this should be reconciled given the product's India-centric framing.
 
 ---
 
