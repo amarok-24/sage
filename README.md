@@ -1,5 +1,6 @@
 # Sage
 
+**Grow your awareness.**
 **One daily brain dump in, six areas of your life organized out.**
 
 Sage is a personal "second brain" assistant. Instead of juggling a habit tracker, a food log, a budgeting app, a sleep journal, and a diary, you type (or paste) one free-form entry describing your day — *"Slept 6.5hrs, kinda restless. Spent $12 on coffee and $40 on groceries. Ran 5k. Journaled about the presentation, felt anxious, 6/10 mood. Skipped meditation again."* — and an AI agent parses it and routes the pieces into the right place automatically.
